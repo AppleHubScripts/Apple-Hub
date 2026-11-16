@@ -2414,7 +2414,7 @@ do
 		Toggle(pAdv, "Avisar quando surgir fruta", "AlertFruit")
 		Toggle(pAdv, "Avisar quando surgir boss", "AlertBoss")
 		local seenF, seenB, bossSet = {}, {}, {}
-		for _, b in ipairs(H.Bosses) do bossSet[b] = true end
+		 b in ipairs(H.Bosses) do bossSet[b] = true end
 		
 			
 				 or v:IsA("Model")) and v.Name:lower():find("fruit") and v:FindFirstChild("Handle") and not

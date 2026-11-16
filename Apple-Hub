@@ -1,0 +1,2060 @@
+--// Apple Hub v6.0 | Blox Fruits | Delta Executor (mobile + PC)
+if getgenv and getgenv().AppleHubUnload then pcall(getgenv().AppleHubUnload) end
+
+local S = setmetatable({}, {__index = function(t, k) local v = game:GetService(k) rawset(t, k, v) return v end})
+local TS, RS, UIS = S.TweenService, S.RunService, S.UserInputService
+local lp, cam = S.Players.LocalPlayer, workspace.CurrentCamera
+local alive, conns = true, {}
+local function conn(c) table.insert(conns, c) return c end
+local H = {frames = 0, fps = 0, start = tick(), version = "6.0", logs = {}, onUnload = {},
+	autoKeys = {"AutoLevel", "Farm", "AutoBoss", "Chest", "FruitGrab", "MatFarm", "AutoRaid", "AutoSea"}}
+local parent = (gethui and gethui()) or S.CoreGui
+pcall(function() for _, n in ipairs({"AppleHub", "AppleHubIntro", "AppleHubTrail"}) do local o = parent:FindFirstChild(n) if o then o:Destroy() end end end)
+pcall(function() for _, n in ipairs({"AppleHubBlur", "AppleHubIntroBlur"}) do local o = S.Lighting:FindFirstChild(n) if o then o:Destroy() end end end)
+
+function H.err(m)
+	table.insert(H.logs, os.date("%H:%M:%S") .. "  " .. tostring(m):sub(1, 140))
+	while #H.logs > 40 do table.remove(H.logs, 1) end
+	if H.logLabel then H.logLabel.Text = table.concat(H.logs, "\n") end
+end
+
+------------------------------------------------------------------
+-- ESTADO + BANCO DE DADOS
+------------------------------------------------------------------
+local State = {
+	Theme = "Midnight", PanelFont = "Gotham", GameFont = "Padrão", Opacity = 0, Corner = 16, Glow = 14,
+	Borders = true, AnimGlow = true, Rainbow = false, Blur = false, BlurSize = 14,
+	Transition = "Deslizar", Easing = "Quint", TransTime = 420, Title = "Apple Hub  •  Blox Fruits", ToggleKey = "RightShift",
+	R = 10, G = 132, B = 255,
+	PW = 600, PH = 380, BorderThick = 1, BorderOpacity = 70, BorderMode = "Gradiente", TopLine = true, TopLineH = 3,
+	CardTrans = 20, ListPad = 8, AnimSpeed = 4, Preset = "Personalizado",
+	TabStyle = "Pílula", TabH = 32, TabGap = 3, SideW = 128, TabIcons = true, TabNames = true, TabTextSize = 13, TabAlign = "Esquerda", ShowChip = true,
+	BtnStyle = "Gradiente", BtnH = 40, BtnCorner = 13, BtnTextSize = 13, BtnShine = true, BtnHover = true,
+	BubbleSize = 52, BubbleShape = "Círculo", BubbleIcon = "A", BubblePulse = true, BubbleSpin = true, BubbleAlways = false, BubbleOpacity = 0,
+	PartOn = true, PartPreset = "Neve", PartCount = 55, PartSpeed = 35, PartSize = 9, PartTrans = 30, PartWind = 10, PartDir = "Cair",
+	PartShape = "Círculo", PartColor = "Branco", PartR = 255, PartG = 150, PartB = 200, PartFront = false, PartTwinkle = true, PartSpin = false,
+	IntroOn = true, IntroStyle = "Cinematic", IntroTime = 6, IntroTitle = "APPLE HUB", IntroSub = "BLOX FRUITS  •  PREMIUM",
+	IntroColor = "Tema", IntroBlur = true, IntroStars = 70, IntroBar = true, IntroSkip = true, IntroByTheme = false,
+	AutoLevel = false, Farm = false, Weapon = "Melee", Height = 8, Click = false, ClickDelay = 80, AutoEquip = true,
+	TravelSpeed = 260, AutoBoss = false, Boss = "Saber Expert",
+	Chest = false, FruitGrab = false, Buso = false, Ken = false,
+	Stat = "Melee", StatPoints = 1, AutoStats = false, AutoCodes = false, Zone = "",
+	BringMob = false, BringRange = 300, SkillZ = false, SkillX = false, SkillC = false, SkillV = false, SkillF = false, SkillDelay = 900,
+	FleeOn = false, FleeHP = 30, AutoRandomFruit = false, AutoStore = false, ESPMobs = false, Fruit = "Bomb-Bomb", NPC = "",
+	ESPPlayers = false, ESPFruits = false, ESPChests = false,
+	Fullbright = false, NoFog = false, FOV = 70, Clock = 14,
+	SpeedOn = false, Speed = 50, JumpOn = false, Jump = 80, Fly = false, FlySpeed = 60,
+	Noclip = false, InfJump = false, Gravity = 196, Water = false, AutoRejoin = false, FPSCap = 60,
+	-- v6
+	FxMode = "Aurora", FxSpeed = 4, SndOn = true, SndVol = 5, NotifMax = 4, Compact = false,
+	TrailOn = false, TrailShape = "Estrela", TrailSize = 12, TrailColor = "Tema",
+	AutoRaid = false, RaidType = "Flame", AutoSea = false, SeaWatch = true, MatFarm = false, Material = "Fish Tail", MatGoal = 50,
+	AlertFruit = true, AlertBoss = true, HookURL = "", HookFruit = true, HookLevel = true, HookBoss = true, HookDisc = true,
+	UpdURL = "", UpdCheck = true, Requeue = false, Remember = false, Eco = false, EcoBlack = false, EcoFPS = 20, QType = "Level até", FavPick = "",
+}
+local SAVE_KEYS = {}
+for k in ([[Theme PanelFont GameFont Opacity Corner Glow Borders AnimGlow Rainbow Blur BlurSize Transition Easing TransTime Title ToggleKey R G B ScalePct
+Weapon Height ClickDelay TravelSpeed Stat StatPoints AutoCodes Boss AutoRejoin PW PH BorderThick BorderOpacity BorderMode TopLine TopLineH CardTrans
+ListPad AnimSpeed Preset TabStyle TabH TabGap SideW TabIcons TabNames TabTextSize TabAlign ShowChip BtnStyle BtnH BtnCorner BtnTextSize BtnShine BtnHover
+BubbleSize BubbleShape BubbleIcon BubblePulse BubbleSpin BubbleAlways BubbleOpacity PartOn PartPreset PartCount PartSpeed PartSize PartTrans PartWind
+PartDir PartShape PartColor PartR PartG PartB PartFront PartTwinkle PartSpin IntroOn IntroStyle IntroTime IntroTitle IntroSub IntroColor IntroBlur
+IntroStars IntroBar IntroSkip IntroByTheme BringRange SkillDelay FleeHP Fruit FxMode FxSpeed SndOn SndVol NotifMax TrailOn TrailShape TrailSize
+TrailColor RaidType SeaWatch Material MatGoal AlertFruit AlertBoss HookURL HookFruit HookLevel HookBoss HookDisc UpdURL UpdCheck Requeue Remember
+Eco EcoBlack EcoFPS QType]]):gmatch("%S+") do table.insert(SAVE_KEYS, k) end
+
+local FILE = "AppleHub_v6.json"
+H.db = {profiles = {}, themes = {}, favs = {}, goals = {}, queue = {}}
+pcall(function()
+	if isfile and isfile(FILE) then
+		for k, v in pairs(S.HttpService:JSONDecode(readfile(FILE))) do H.db[k] = v end
+	end
+end)
+for k, v in pairs(H.db.cfg or {}) do if State[k] ~= nil and type(State[k]) == type(v) then State[k] = v end end
+
+------------------------------------------------------------------
+-- TEMAS
+------------------------------------------------------------------
+local function th(bg, side, row, text, sub, a1, a2)
+	local f = function(s) if not s:find("^#") then s = "#" .. s end return Color3.fromHex(s) end
+	return {bg = f(bg), side = f(side), row = f(row), text = f(text), sub = f(sub), accent = f(a1), accent2 = f(a2)}
+end
+local Themes = {
+	Midnight = th("#121218", "#1c1c24", "#282832", "#f5f5f7", "#9696a5", "#0a84ff", "#5e5ce6"),
+	Ocean = th("#07131f", "#0b1f30", "#133046", "#ebf8ff", "#82aac3", "#00c8ff", "#006eff"),
+	Sunset = th("#1c0f14", "#2a161d", "#3c2028", "#fff2ee", "#be9696", "#ff7d46", "#ff3264"),
+	Aurora = th("#0b1816", "#112622", "#1b3832", "#ecfff9", "#82b4a5", "#34e6a0", "#5a78ff"),
+	Sakura = th("#1e131c", "#2c1c29", "#3e2638", "#fff0f9", "#c396b4", "#ff78be", "#b96eff"),
+	Gold = th("#18140c", "#241e10", "#362d18", "#fff7e4", "#beaa78", "#ffc43c", "#ff871e"),
+	Graphite = th("#1c1c1c", "#262626", "#363636", "#f5f5f5", "#969696", "#d2d2d7", "#7d7d8c"),
+	Claro = th("#f2f2f7", "#e5e5ea", "#ffffff", "#1c1c1e", "#6e6e78", "#0a84ff", "#5ac8fa"),
+	Dracula = th("#191a21", "#21222c", "#2d2f3d", "#f8f8f2", "#8b93b8", "#bd93f9", "#ff79c6"),
+	Nord = th("#1e222a", "#272c36", "#333a47", "#eceff4", "#8f9bb3", "#88c0d0", "#81a1c1"),
+	TokyoNight = th("#14151f", "#1a1b2a", "#24283b", "#c0caf5", "#7a85b0", "#7aa2f7", "#bb9af7"),
+	Cyberpunk = th("#0d0221", "#170338", "#261047", "#f0e6ff", "#9a86c9", "#ff2a6d", "#05d9e8"),
+	Matrix = th("#020a04", "#06150a", "#0c2614", "#d6ffe0", "#5fa575", "#00ff6a", "#00b34a"),
+	Lava = th("#1a0a05", "#2a0f07", "#40170b", "#fff0e6", "#c28a70", "#ff4500", "#ffb300"),
+	Neon = th("#0a0a12", "#12121f", "#1c1c30", "#ffffff", "#8a8ab0", "#39ff14", "#00e5ff"),
+	Emerald = th("#06140f", "#0b2219", "#12362a", "#e8fff4", "#6fb89a", "#10d98c", "#00a876"),
+	Ruby = th("#1a0609", "#2a0d12", "#401520", "#fff0f2", "#c48a92", "#ff2d55", "#c4004a"),
+	Royal = th("#0c0a1f", "#14123a", "#1f1c55", "#eeeaff", "#8d89c9", "#7c5cff", "#4a6bff"),
+	Mocha = th("#1b1512", "#281f1a", "#3a2d25", "#f5ebe0", "#b39a86", "#d4a373", "#b5835a"),
+	Candy = th("#1f1230", "#2e1a45", "#432661", "#fff0fb", "#bc96d6", "#ff7ad9", "#7af0ff"),
+	Galaxy = th("#070514", "#0e0a26", "#1a1440", "#efeaff", "#8f86c4", "#9d4edd", "#3a86ff"),
+	Ice = th("#0a1620", "#112433", "#1b3a52", "#eaf8ff", "#86b3cc", "#a0e9ff", "#5ec2ff"),
+	Forest = th("#0d1a0e", "#15281a", "#203c27", "#ecfff0", "#86b393", "#7bd88f", "#4fae6b"),
+	RoseGold = th("#1c1415", "#2a1d1f", "#3d2a2d", "#fff1ef", "#c9a09c", "#f4b6a6", "#e0897a"),
+	AMOLED = th("#000000", "#0a0a0a", "#161616", "#ffffff", "#8a8a8a", "#0a84ff", "#64d2ff"),
+	Synthwave = th("#120a24", "#1c1038", "#2c1a52", "#fff0ff", "#a98ccf", "#ff00a0", "#00cfff"),
+	Lemon = th("#1a1a0a", "#26260f", "#38381a", "#fffff0", "#b8b88a", "#ffe600", "#b8d400"),
+	Steel = th("#0f1419", "#171e26", "#212b36", "#e6edf3", "#7d8b99", "#58a6ff", "#2f81f7"),
+	Lavender = th("#17141f", "#221d2e", "#302842", "#f3eeff", "#a89ac4", "#b79cff", "#8f7cf2"),
+	Coral = th("#1a1010", "#271717", "#3a2323", "#fff1ef", "#c19a97", "#ff6b6b", "#ffa94d"),
+	Menta = th("#eefaf4", "#dcefe5", "#ffffff", "#14281e", "#5f7f6e", "#14b87a", "#0a8f5e"),
+	Rosa = th("#fdf0f4", "#f6dde5", "#ffffff", "#2c1620", "#8a6676", "#ff4d8d", "#ff8fb3"),
+	Apple = th("#150808", "#220d0d", "#341515", "#fff1f0", "#c79594", "#ff3b30", "#ff9500"),
+	Vaporwave = th("#10062b", "#190a40", "#2a1263", "#fdf0ff", "#a78bd1", "#ff71ce", "#01cdfe"),
+	Hologram = th("#06141a", "#0a212b", "#10303d", "#e8ffff", "#7fb5c2", "#00ffd5", "#7b61ff"),
+}
+Themes.Ultra = th("#0b0b0f", "#14141c", "#1f1f2b", "#ffffff", "#9a9ab5", "#ff0080", "#00e1ff")
+Themes.Custom = {}
+for k, v in pairs(Themes.Midnight) do Themes.Custom[k] = v end
+local function updateCustom()
+	local a = Color3.fromRGB(State.R, State.G, State.B)
+	Themes.Custom.accent = a
+	Themes.Custom.accent2 = a:Lerp(Color3.fromRGB(255, 80, 200), 0.45)
+end
+updateCustom()
+local ThemeNames = {"Midnight", "Ocean", "Sunset", "Aurora", "Sakura", "Gold", "Graphite", "Claro", "Dracula", "Nord", "TokyoNight",
+	"Cyberpunk", "Matrix", "Lava", "Neon", "Emerald", "Ruby", "Royal", "Mocha", "Candy", "Galaxy", "Ice", "Forest", "RoseGold",
+	"AMOLED", "Synthwave", "Lemon", "Steel", "Lavender", "Coral", "Menta", "Rosa", "Apple", "Vaporwave", "Hologram", "Custom"}
+for name, c in pairs(H.db.themes) do
+	pcall(function() Themes[name] = th(c[1], c[2], c[3], c[4], c[5], c[6], c[7]) table.insert(ThemeNames, #ThemeNames, name) end)
+end
+local T = Themes[State.Theme] or Themes.Midnight
+
+------------------------------------------------------------------
+-- FONTES
+------------------------------------------------------------------
+local FontOrder = {"Gotham", "GothamMedium", "SourceSans", "SourceSansLight", "Arial", "Roboto", "RobotoCondensed", "RobotoMono", "Ubuntu",
+	"Nunito", "Oswald", "Jura", "Michroma", "FredokaOne", "Merriweather", "JosefinSans", "TitilliumWeb", "Sarpanch", "Code", "SciFi",
+	"Arcade", "Highway", "Cartoon", "Bangers", "LuckiestGuy", "IndieFlower", "PatrickHand", "Kalam", "AmaticSC", "PermanentMarker",
+	"SpecialElite", "DenkOne", "Fondamento", "Garamond", "Bodoni", "Antique", "Fantasy", "Creepster", "GrenzeGotisch"}
+local getFont
+do
+	local BoldMap = {Gotham = "GothamBold", GothamMedium = "GothamBold", SourceSans = "SourceSansBold", SourceSansLight = "SourceSansBold", Arial = "ArialBold"}
+	getFont = function(name, bold)
+		local en = (bold and BoldMap[name]) or name
+		local ok, f = pcall(function() return Enum.Font[en] end)
+		return (ok and f) or Enum.Font.Gotham
+	end
+end
+local function ease()
+	local ok, e = pcall(function() return Enum.EasingStyle[State.Easing] end)
+	return (ok and e) or Enum.EasingStyle.Quint
+end
+
+------------------------------------------------------------------
+-- HELPERS
+------------------------------------------------------------------
+local function new(class, props, kids)
+	local o = Instance.new(class)
+	for k, v in pairs(props) do if k ~= "Parent" then o[k] = v end end
+	for _, k in ipairs(kids or {}) do k.Parent = o end
+	if props.Parent then o.Parent = props.Parent end
+	return o
+end
+local function corner(r) return new("UICorner", {CornerRadius = UDim.new(0, r)}) end
+local function tween(o, t, p, style)
+	pcall(function() TS:Create(o, TweenInfo.new(t, style or Enum.EasingStyle.Quint, Enum.EasingDirection.Out), p):Play() end)
+end
+local cornerList = {}
+local function rc(base)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, math.floor(base * State.Corner / 16 + 0.5))
+	table.insert(cornerList, {c, base})
+	return c
+end
+local function setCorners()
+	for _, e in ipairs(cornerList) do
+		pcall(function() e[1].CornerRadius = UDim.new(0, math.floor(e[2] * State.Corner / 16 + 0.5)) end)
+	end
+end
+
+local binders, fastBinders, fontObjs, tabRefresh = {}, {}, {}, {}
+local refreshThemeCards
+local function bind(obj, prop, key, fast)
+	local function f(d)
+		local v = type(key) == "function" and key() or T[key]
+		pcall(function()
+			if d and d > 0 and typeof(v) ~= "ColorSequence" then tween(obj, d, {[prop] = v}) else obj[prop] = v end
+		end)
+	end
+	table.insert(binders, f)
+	if fast or key == "accent" or key == "accent2" then table.insert(fastBinders, f) end
+	f(0)
+	return f
+end
+local function applyTheme(name)
+	if not Themes[name] then return end
+	T = Themes[name]
+	State.Theme = name
+	for _, f in ipairs(binders) do f(0.4) end
+	if refreshThemeCards then refreshThemeCards() end
+end
+local function offColor() return T.row:Lerp(T.sub, 0.4) end
+local strokeList = {}
+local function glass(obj, tr)
+	local s = new("UIStroke", {Thickness = 1, Transparency = tr or 0.9, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Enabled = State.Borders, Parent = obj})
+	bind(s, "Color", "text")
+	table.insert(strokeList, s)
+	return s
+end
+local function regFont(o, bold)
+	table.insert(fontObjs, {o, bold})
+	o.Font = getFont(State.PanelFont, bold)
+end
+local function setPanelFont(name)
+	State.PanelFont = name
+	for _, e in ipairs(fontObjs) do pcall(function() e[1].Font = getFont(name, e[2]) end) end
+end
+local function mkText(props, bold, colorKey, class)
+	props.BackgroundTransparency = 1
+	if colorKey == nil then colorKey = "text" end
+	if colorKey then props.TextColor3 = T[colorKey] end
+	local o = new(class or "TextLabel", props)
+	regFont(o, bold)
+	if colorKey then bind(o, "TextColor3", colorKey) end
+	return o
+end
+
+local applyAppearance, relayout, restyleButtons, applyBubble, updateBubble, showMain, hideMain, playIntro, syncUI, addPage, switchTab
+local syncers = {}
+local pageLists, cards = {}, {}
+
+------------------------------------------------------------------
+-- GUI BASE
+------------------------------------------------------------------
+local gui = new("ScreenGui", {Name = "AppleHub", ResetOnSpawn = false, IgnoreGuiInset = true, ZIndexBehavior = Enum.ZIndexBehavior.Sibling})
+gui.Parent = parent
+if not State.ScalePct then
+	local vp = cam.ViewportSize
+	State.ScalePct = math.floor(math.clamp(math.floor(math.min(vp.X / 640, vp.Y / 410) * 100) / 100, 0.5, 1) * 100)
+end
+State.Scale = State.ScalePct / 100
+
+local main = new("CanvasGroup", {
+	Name = "Main", Size = UDim2.fromOffset(State.PW, State.PH), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+	BackgroundColor3 = T.bg, BackgroundTransparency = State.Opacity / 100, BorderSizePixel = 0, GroupTransparency = 1, Visible = false, Parent = gui,
+}, {rc(22)})
+bind(main, "BackgroundColor3", "bg")
+local uiscale = new("UIScale", {Scale = State.Scale * 0.88, Parent = main})
+local mainStroke = new("UIStroke", {Thickness = State.BorderThick, Transparency = State.BorderOpacity / 100, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Enabled = State.Borders, Parent = main})
+local strokeColorBinder = bind(mainStroke, "Color", function() return State.BorderMode == "Destaque" and T.accent or T.text end)
+local mainStrokeG = new("UIGradient", {Enabled = State.BorderMode == "Gradiente", Parent = mainStroke})
+bind(mainStrokeG, "Color", function()
+	return ColorSequence.new({ColorSequenceKeypoint.new(0, T.accent), ColorSequenceKeypoint.new(0.5, T.accent2), ColorSequenceKeypoint.new(1, T.accent)})
+end, true)
+local glow = new("Frame", {Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 1 - State.Glow / 100, BorderSizePixel = 0, ZIndex = 0, Parent = main})
+local glowG = new("UIGradient", {Rotation = 35, Parent = glow})
+bind(glowG, "Color", function() return ColorSequence.new(T.accent, T.accent2) end, true)
+local partLayer = new("Frame", {Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = State.PartFront and 50 or 1, ClipsDescendants = true, Active = false, Parent = main})
+local topLine = new("Frame", {Size = UDim2.new(1, 0, 0, State.TopLineH), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, ZIndex = 5, Visible = State.TopLine, Parent = main})
+local tlG = new("UIGradient", {Parent = topLine})
+bind(tlG, "Color", function()
+	return ColorSequence.new({ColorSequenceKeypoint.new(0, T.accent), ColorSequenceKeypoint.new(0.5, T.accent2), ColorSequenceKeypoint.new(1, T.accent)})
+end, true)
+H.main, H.gui = main, gui
+
+local shown = false
+local blur = new("BlurEffect", {Name = "AppleHubBlur", Size = 0, Parent = S.Lighting})
+local function updateBlur() tween(blur, 0.4, {Size = (State.Blur and shown) and State.BlurSize or 0}) end
+
+-- notificações melhoradas
+local notifHolder = new("Frame", {Size = UDim2.new(0, 270, 1, -20), Position = UDim2.new(1, -280, 0, 10), BackgroundTransparency = 1, Parent = gui},
+	{new("UIListLayout", {VerticalAlignment = Enum.VerticalAlignment.Bottom, Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Right, SortOrder = Enum.SortOrder.LayoutOrder})})
+local function notify(title, msg, dur, kind)
+	dur = dur or 3
+	kind = kind or (title == "Erro" and "error" or "info")
+	local col = ({ok = Color3.fromRGB(52, 211, 153), warn = Color3.fromRGB(251, 191, 36), error = Color3.fromRGB(248, 113, 113)})[kind] or T.accent
+	local icon = ({ok = "✓", warn = "⚠", error = "✕"})[kind] or "ℹ"
+	local kids = {}
+	for _, c in ipairs(notifHolder:GetChildren()) do if c:IsA("CanvasGroup") then table.insert(kids, c) end end
+	while #kids >= math.max(State.NotifMax, 1) do table.remove(kids, 1):Destroy() end
+	local f = new("CanvasGroup", {Size = UDim2.new(1, 0, 0, 58), BackgroundColor3 = T.row, GroupTransparency = 1, Parent = notifHolder}, {rc(14)})
+	bind(f, "BackgroundColor3", "row")
+	new("TextLabel", {Size = UDim2.fromOffset(30, 30), Position = UDim2.fromOffset(12, 10), BackgroundColor3 = col, BackgroundTransparency = 0.8, Text = icon,
+		TextColor3 = col, Font = Enum.Font.GothamBold, TextSize = 16, Parent = f}, {corner(15)})
+	mkText({Size = UDim2.new(1, -62, 0, 18), Position = UDim2.fromOffset(50, 7), Text = title, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = f}, true)
+	mkText({Size = UDim2.new(1, -62, 0, 22), Position = UDim2.fromOffset(50, 27), Text = msg, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = f}, false, "sub")
+	local bar = new("Frame", {Size = UDim2.new(1, 0, 0, 3), Position = UDim2.new(0, 0, 1, -3), BackgroundColor3 = col, BorderSizePixel = 0, Parent = f})
+	tween(f, 0.35, {GroupTransparency = 0})
+	tween(bar, dur, {Size = UDim2.new(0, 0, 0, 3)}, Enum.EasingStyle.Linear)
+	if H.snd then H.snd("notif") end
+	task.delay(dur, function()
+		tween(f, 0.35, {GroupTransparency = 1})
+		task.wait(0.4)
+		pcall(function() f:Destroy() end)
+	end)
+end
+
+local top = new("Frame", {Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1, Parent = main})
+local red, yellow
+do
+	local function dot(x, color)
+		return new("TextButton", {Size = UDim2.fromOffset(13, 13), Position = UDim2.fromOffset(x, 15), BackgroundColor3 = color, Text = "", AutoButtonColor = false, Parent = top}, {corner(7)})
+	end
+	red = dot(16, Color3.fromRGB(255, 95, 87))
+	yellow = dot(36, Color3.fromRGB(254, 188, 46))
+	dot(56, Color3.fromRGB(40, 200, 64))
+end
+local titleLabel = mkText({Size = UDim2.new(1, 0, 1, 0), Text = State.Title, TextSize = 13, Parent = top}, true, "sub")
+local chipLabel = mkText({Size = UDim2.fromOffset(130, 40), Position = UDim2.new(1, -142, 0, 0), Text = "-- FPS", TextSize = 11, TextXAlignment = Enum.TextXAlignment.Right, Parent = top}, true, "accent")
+
+local function drag(handle, target)
+	local st = {moved = false}
+	local dragging, start, origin
+	handle.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+			dragging, start, origin, st.moved = true, i.Position, target.Position, false
+			i.Changed:Connect(function() if i.UserInputState == Enum.UserInputState.End then dragging = false end end)
+		end
+	end)
+	conn(UIS.InputChanged:Connect(function(i)
+		if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+			local d = i.Position - start
+			if d.Magnitude > 6 then st.moved = true end
+			target.Position = UDim2.new(origin.X.Scale, origin.X.Offset + d.X, origin.Y.Scale, origin.Y.Offset + d.Y)
+		end
+	end))
+	return st
+end
+drag(top, main)
+
+------------------------------------------------------------------
+-- BOLHA FLUTUANTE
+------------------------------------------------------------------
+do
+	local holder = new("Frame", {Size = UDim2.fromOffset(State.BubbleSize, State.BubbleSize), Position = UDim2.new(0, 16, 0.4, 0), BackgroundTransparency = 1, Visible = false, ZIndex = 10, Parent = gui})
+	local pulse = new("Frame", {AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1), BackgroundColor3 = T.accent, BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 1, Parent = holder})
+	bind(pulse, "BackgroundColor3", "accent")
+	local pulseCorner = new("UICorner", {CornerRadius = UDim.new(0.5, 0), Parent = pulse})
+	local bubble = new("TextButton", {Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, ZIndex = 2, Parent = holder})
+	local bubCorner = new("UICorner", {CornerRadius = UDim.new(0.5, 0), Parent = bubble})
+	local bubbleG = new("UIGradient", {Rotation = 45, Parent = bubble})
+	bind(bubbleG, "Color", function() return ColorSequence.new(T.accent, T.accent2) end, true)
+	local bubIcon = mkText({Size = UDim2.fromScale(1, 1), Text = State.BubbleIcon, TextSize = 24, TextColor3 = Color3.new(1, 1, 1), Parent = bubble}, true, false)
+	local bubStroke = new("UIStroke", {Color = Color3.new(1, 1, 1), Transparency = 0.2, Thickness = 2.5, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = bubble})
+	local bubStrokeG = new("UIGradient", {Parent = bubStroke})
+	bind(bubStrokeG, "Color", function()
+		return ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)), ColorSequenceKeypoint.new(0.5, T.accent2), ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1))})
+	end, true)
+	local bd = drag(bubble, holder)
+	updateBubble = function() holder.Visible = (not shown) or State.BubbleAlways end
+	applyBubble = function()
+		local s = State.BubbleSize
+		holder.Size = UDim2.fromOffset(s, s)
+		bubIcon.Text = State.BubbleIcon
+		bubIcon.TextSize = math.floor(s * 0.46)
+		local r = UDim.new(State.BubbleShape == "Círculo" and 0.5 or 0.26, 0)
+		bubCorner.CornerRadius, pulseCorner.CornerRadius = r, r
+		bubble.BackgroundTransparency = State.BubbleOpacity / 100
+		updateBubble()
+	end
+	bubble.MouseButton1Click:Connect(function()
+		if bd.moved then return end
+		if shown then hideMain() else showMain() end
+	end)
+	task.spawn(function()
+		while alive do
+			task.wait(0.03)
+			if State.BubbleSpin then bubStrokeG.Rotation = (bubStrokeG.Rotation + 6) % 360 end
+		end
+	end)
+	task.spawn(function()
+		while alive do
+			task.wait(1.7)
+			if State.BubblePulse and holder.Visible then
+				pulse.Size = UDim2.fromScale(1, 1)
+				pulse.BackgroundTransparency = 0.45
+				tween(pulse, 1.4, {Size = UDim2.fromScale(1.9, 1.9), BackgroundTransparency = 1}, Enum.EasingStyle.Quad)
+			end
+		end
+	end)
+end
+showMain = function()
+	shown = true
+	main.Visible = true
+	tween(main, 0.4, {GroupTransparency = 0})
+	tween(uiscale, 0.5, {Scale = State.Scale}, Enum.EasingStyle.Back)
+	updateBlur()
+	updateBubble()
+end
+hideMain = function()
+	shown = false
+	tween(main, 0.25, {GroupTransparency = 1})
+	tween(uiscale, 0.25, {Scale = State.Scale * 0.9})
+	updateBlur()
+	updateBubble()
+	task.delay(0.27, function() if not shown then main.Visible = false end end)
+end
+yellow.MouseButton1Click:Connect(function() hideMain() end)
+conn(UIS.InputBegan:Connect(function(i, gp)
+	if not gp and i.KeyCode.Name == State.ToggleKey then if shown then hideMain() else showMain() end end
+end))
+
+------------------------------------------------------------------
+-- SIDEBAR + ABAS
+------------------------------------------------------------------
+do
+	local side = new("Frame", {Size = UDim2.new(0, State.SideW, 1, -50), Position = UDim2.fromOffset(8, 42), BackgroundColor3 = T.side, BackgroundTransparency = 0.2, Parent = main}, {rc(16)})
+	bind(side, "BackgroundColor3", "side")
+	glass(side, 0.92)
+	local tabScroll = new("ScrollingFrame", {Size = UDim2.new(1, 0, 1, -52), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 2,
+		CanvasSize = UDim2.new(), ScrollingDirection = Enum.ScrollingDirection.Y, Parent = side})
+	bind(tabScroll, "ScrollBarImageColor3", "accent")
+	local indicator = new("Frame", {Size = UDim2.new(1, -12, 0, State.TabH), Position = UDim2.fromOffset(6, 8), BackgroundColor3 = Color3.new(1, 1, 1), ZIndex = 1, Parent = tabScroll})
+	local indCorner = new("UICorner", {CornerRadius = UDim.new(0, 11), Parent = indicator})
+	local indG = new("UIGradient", {Parent = indicator})
+	bind(indG, "Color", function() return ColorSequence.new(T.accent, T.accent2) end, true)
+	local indStroke = new("UIStroke", {Thickness = 2, Enabled = false, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = indicator})
+	bind(indStroke, "Color", "accent")
+
+	local chip = new("Frame", {Size = UDim2.new(1, -12, 0, 40), Position = UDim2.new(0, 6, 1, -46), BackgroundColor3 = T.row, BackgroundTransparency = 0.25, Parent = side}, {rc(12)})
+	bind(chip, "BackgroundColor3", "row")
+	local chipAv = new("ImageLabel", {Size = UDim2.fromOffset(28, 28), Position = UDim2.fromOffset(6, 6), BackgroundColor3 = T.side, Parent = chip}, {corner(14)})
+	bind(chipAv, "BackgroundColor3", "side")
+	mkText({Size = UDim2.new(1, -44, 0, 18), Position = UDim2.fromOffset(40, 3), Text = lp.DisplayName, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = chip}, true)
+	H.chipLv = mkText({Size = UDim2.new(1, -44, 0, 14), Position = UDim2.fromOffset(40, 21), Text = "Lv —", TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left, Parent = chip}, false, "accent")
+	task.spawn(function()
+		local ok, img = pcall(function() return S.Players:GetUserThumbnailAsync(lp.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
+		if ok then chipAv.Image = img; H.avatar = img end
+	end)
+	local content = new("Frame", {Size = UDim2.new(1, -(State.SideW + 24), 1, -50), Position = UDim2.fromOffset(State.SideW + 18, 42), BackgroundTransparency = 1, ClipsDescendants = true, Parent = main})
+
+	local pages, pageScale, tabY, tabIdx, current, tabCount = {}, {}, {}, {}, nil, 0
+	local tabBtns, tabIcons, tabPads = {}, {}, {}
+	local function P(ox, oy) return UDim2.new(0.5, ox, 0.5, oy) end
+	local function indPos(name)
+		local y = tabY[name] or 8
+		if State.TabStyle == "Linha" then return UDim2.fromOffset(6, y + 6) end
+		return UDim2.fromOffset(6, y)
+	end
+	local function activeTabColor()
+		local s = State.TabStyle
+		if s == "Pílula" then return Color3.new(1, 1, 1) elseif s == "Contorno" or s == "Suave" then return T.accent end
+		return T.text
+	end
+	local function tabText(name)
+		local ic = tabIcons[name]
+		if State.TabIcons and State.TabNames then return ic .. "  " .. name elseif State.TabIcons then return ic end
+		return name
+	end
+	local function updateIndicator()
+		local s, h = State.TabStyle, State.TabH
+		if s == "Linha" then
+			indicator.Size = UDim2.fromOffset(4, h - 12)
+			indicator.BackgroundTransparency = 0
+			indStroke.Enabled = false
+			indCorner.CornerRadius = UDim.new(0, 2)
+		else
+			indicator.Size = UDim2.new(1, -12, 0, h)
+			indCorner.CornerRadius = UDim.new(0, math.floor(11 * State.Corner / 16 + 0.5))
+			if s == "Contorno" then indicator.BackgroundTransparency = 1; indStroke.Enabled = true
+			elseif s == "Suave" then indicator.BackgroundTransparency = 0.6; indStroke.Enabled = true
+			else indicator.BackgroundTransparency = 0; indStroke.Enabled = false end
+		end
+		if current then indicator.Position = indPos(current) end
+	end
+
+	switchTab = function(name)
+		if current == name or not pages[name] then return end
+		local oldName = current
+		current = name
+		for _, f in ipairs(tabRefresh) do f(0.25) end
+		local tt = math.max(State.TransTime, 50) / 1000
+		local es = ease()
+		local kind = State.Transition
+		tween(indicator, tt, {Position = indPos(name)}, es)
+		local dir = (oldName and tabIdx[name] < tabIdx[oldName]) and -1 or 1
+		if oldName then
+			local old, oldS = pages[oldName], pageScale[oldName]
+			if kind == "Nenhuma" then
+				old.Visible = false
+			else
+				local goal = {GroupTransparency = 1}
+				if kind == "Deslizar" then goal.Position = P(-30 * dir, 0)
+				elseif kind == "Subir" then goal.Position = P(0, -30 * dir)
+				elseif kind == "Girar" then goal.Rotation = -8 * dir end
+				tween(old, tt * 0.5, goal, Enum.EasingStyle.Quad)
+				if kind == "Zoom" or kind == "Pop" then tween(oldS, tt * 0.5, {Scale = 1.06}, Enum.EasingStyle.Quad) end
+				task.delay(tt * 0.5 + 0.03, function() if current ~= oldName then old.Visible = false end end)
+			end
+		end
+		local pg, ps = pages[name], pageScale[name]
+		pg.Position = P(0, 0)
+		pg.Rotation = 0
+		ps.Scale = 1
+		if kind == "Deslizar" then pg.Position = P(34 * dir, 0)
+		elseif kind == "Subir" then pg.Position = P(0, 34 * dir)
+		elseif kind == "Zoom" then ps.Scale = 0.9
+		elseif kind == "Pop" then ps.Scale = 0.7
+		elseif kind == "Girar" then pg.Rotation = 8 * dir end
+		pg.GroupTransparency = (kind == "Nenhuma") and 0 or 1
+		pg.Visible = true
+		if kind == "Nenhuma" then return end
+		task.delay(tt * 0.2, function()
+			if current ~= name then return end
+			tween(pg, tt, {GroupTransparency = 0, Position = P(0, 0), Rotation = 0}, es)
+			tween(ps, tt, {Scale = 1}, es)
+		end)
+	end
+
+	addPage = function(name, icon)
+		local grp = new("CanvasGroup", {Size = UDim2.fromScale(1, 1), AnchorPoint = Vector2.new(0.5, 0.5), Position = P(0, 0), BackgroundTransparency = 1, GroupTransparency = 1, Visible = false, Parent = content})
+		local ps = new("UIScale", {Parent = grp})
+		local layout = new("UIListLayout", {Padding = UDim.new(0, State.ListPad), SortOrder = Enum.SortOrder.LayoutOrder})
+		table.insert(pageLists, layout)
+		local sc = new("ScrollingFrame", {Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3,
+			AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new(), Parent = grp},
+			{layout, new("UIPadding", {PaddingRight = UDim.new(0, 8), PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 12)})})
+		bind(sc, "ScrollBarImageColor3", "accent")
+		pages[name], pageScale[name] = grp, ps
+		tabCount = tabCount + 1
+		tabIdx[name], tabIcons[name] = tabCount, icon
+		tabY[name] = 8 + (tabCount - 1) * (State.TabH + State.TabGap)
+		local btn = mkText({Size = UDim2.new(1, -12, 0, State.TabH), Position = UDim2.fromOffset(6, tabY[name]), Text = tabText(name), TextSize = State.TabTextSize,
+			TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, AutoButtonColor = false, Parent = tabScroll}, true, false, "TextButton")
+		tabPads[name] = new("UIPadding", {PaddingLeft = UDim.new(0, 12), Parent = btn})
+		tabBtns[name] = btn
+		local refresh = function(d) tween(btn, d or 0.2, {TextColor3 = current == name and activeTabColor() or T.sub}) end
+		table.insert(tabRefresh, refresh)
+		table.insert(binders, refresh)
+		btn.TextColor3 = T.sub
+		btn.MouseButton1Click:Connect(function() switchTab(name) end)
+		return sc
+	end
+
+	relayout = function()
+		local sw = State.SideW
+		side.Size = UDim2.new(0, sw, 1, -50)
+		content.Position = UDim2.fromOffset(sw + 18, 42)
+		content.Size = UDim2.new(1, -(sw + 24), 1, -50)
+		chip.Visible = State.ShowChip
+		tabScroll.Size = UDim2.new(1, 0, 1, State.ShowChip and -52 or -8)
+		local step = State.TabH + State.TabGap
+		local count = 0
+		local center = (State.TabIcons and not State.TabNames) or State.TabAlign == "Centro"
+		for name, idx in pairs(tabIdx) do
+			count = count + 1
+			tabY[name] = 8 + (idx - 1) * step
+			local b = tabBtns[name]
+			b.Size = UDim2.new(1, -12, 0, State.TabH)
+			b.Position = UDim2.fromOffset(6, tabY[name])
+			b.TextSize = State.TabTextSize
+			b.Text = tabText(name)
+			b.TextXAlignment = center and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left
+			tabPads[name].PaddingLeft = UDim.new(0, center and 0 or 12)
+		end
+		tabScroll.CanvasSize = UDim2.fromOffset(0, 16 + count * step)
+		updateIndicator()
+		for _, f in ipairs(tabRefresh) do f(0) end
+	end
+end
+
+------------------------------------------------------------------
+-- COMPONENTES
+------------------------------------------------------------------
+local function row(page, h)
+	local r = new("Frame", {Size = UDim2.new(1, -4, 0, h or 40), BackgroundColor3 = T.row, BackgroundTransparency = State.CardTrans / 100, Parent = page}, {rc(13)})
+	bind(r, "BackgroundColor3", "row")
+	glass(r, 0.93)
+	table.insert(cards, r)
+	return r
+end
+local function Section(page, text)
+	local f = new("Frame", {Size = UDim2.new(1, -4, 0, 24), BackgroundTransparency = 1, Parent = page})
+	local bar = new("Frame", {Size = UDim2.fromOffset(3, 12), Position = UDim2.new(0, 2, 0.5, -6), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Parent = f}, {corner(2)})
+	local g = new("UIGradient", {Rotation = 90, Parent = bar})
+	bind(g, "Color", function() return ColorSequence.new(T.accent, T.accent2) end, true)
+	mkText({Size = UDim2.new(1, -14, 1, 0), Position = UDim2.fromOffset(12, 0), Text = string.upper(text), TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left, Parent = f}, true, "accent")
+end
+local function Label(page, text)
+	return mkText({Size = UDim2.new(1, -4, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, Text = text, TextSize = 12, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Parent = page}, false, "sub")
+end
+local function Toggle(page, text, key, cb)
+	local r = row(page, 42)
+	mkText({Size = UDim2.new(1, -76, 1, 0), Position = UDim2.fromOffset(14, 0), Text = text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = r}, false)
+	local sw = new("TextButton", {Size = UDim2.fromOffset(46, 26), Position = UDim2.new(1, -60, 0.5, -13), Text = "", AutoButtonColor = false, Parent = r}, {corner(13)})
+	local knob = new("Frame", {Size = UDim2.fromOffset(22, 22), Position = State[key] and UDim2.fromOffset(22, 2) or UDim2.fromOffset(2, 2), BackgroundColor3 = Color3.new(1, 1, 1), Parent = sw}, {corner(11)})
+	local refresh = bind(sw, "BackgroundColor3", function() return State[key] and T.accent or offColor() end, true)
+	syncers[key] = function()
+		refresh(0)
+		knob.Position = State[key] and UDim2.fromOffset(22, 2) or UDim2.fromOffset(2, 2)
+	end
+	sw.MouseButton1Click:Connect(function()
+		State[key] = not State[key]
+		refresh(0.25)
+		tween(knob, 0.3, {Position = State[key] and UDim2.fromOffset(22, 2) or UDim2.fromOffset(2, 2)}, Enum.EasingStyle.Back)
+		if cb then task.spawn(function() local ok, err = pcall(cb, State[key]); if not ok then H.err(err); notify("Erro", tostring(err), 3, "error") end end) end
+	end)
+end
+local function Slider(page, text, min, max, key, cb, suffix)
+	suffix = suffix or ""
+	local r = row(page, 58)
+	mkText({Size = UDim2.new(0.6, 0, 0, 28), Position = UDim2.fromOffset(14, 2), Text = text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = r}, false)
+	local vl = mkText({Size = UDim2.new(0.4, -28, 0, 28), Position = UDim2.new(0.6, 14, 0, 2), Text = State[key] .. suffix, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Right, Parent = r}, true, "accent")
+	local bar = new("Frame", {Size = UDim2.new(1, -28, 0, 8), Position = UDim2.fromOffset(14, 40), BackgroundColor3 = T.sub, Parent = r}, {corner(4)})
+	bind(bar, "BackgroundColor3", offColor)
+	local a0 = math.clamp((State[key] - min) / (max - min), 0, 1)
+	local fill = new("Frame", {Size = UDim2.new(a0, 0, 1, 0), BackgroundColor3 = Color3.new(1, 1, 1), Parent = bar}, {corner(4)})
+	local fg = new("UIGradient", {Parent = fill})
+	bind(fg, "Color", function() return ColorSequence.new(T.accent, T.accent2) end, true)
+	new("Frame", {Size = UDim2.fromOffset(18, 18), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, 0, 0.5, 0), BackgroundColor3 = Color3.new(1, 1, 1), Parent = fill},
+		{corner(9), new("UIStroke", {Color = Color3.new(0, 0, 0), Transparency = 0.8, Thickness = 1})})
+	syncers[key] = function()
+		fill.Size = UDim2.new(math.clamp((State[key] - min) / (max - min), 0, 1), 0, 1, 0)
+		vl.Text = State[key] .. suffix
+	end
+	local sliding = false
+	local function set(x)
+		local a = math.clamp((x - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
+		local v = math.floor(min + (max - min) * a + 0.5)
+		State[key] = v
+		fill.Size = UDim2.new(a, 0, 1, 0)
+		vl.Text = v .. suffix
+		if cb then pcall(cb, v) end
+	end
+	local hit = new("TextButton", {Size = UDim2.new(1, 0, 0, 30), Position = UDim2.fromOffset(0, 28), BackgroundTransparency = 1, Text = "", Parent = r})
+	hit.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+			sliding = true
+			if page:IsA("ScrollingFrame") then page.ScrollingEnabled = false end
+			set(i.Position.X)
+		end
+	end)
+	conn(UIS.InputChanged:Connect(function(i)
+		if sliding and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then set(i.Position.X) end
+	end))
+	conn(UIS.InputEnded:Connect(function(i)
+		if sliding and (i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch) then
+			sliding = false
+			if page:IsA("ScrollingFrame") then page.ScrollingEnabled = true end
+		end
+	end))
+end
+
+local Button
+do
+	local reg = {}
+	local function styleBtn(e)
+		local s, white = State.BtnStyle, Color3.new(1, 1, 1)
+		e.h.Size = UDim2.new(1, -4, 0, State.BtnH)
+		e.cr.CornerRadius = UDim.new(0, State.BtnCorner)
+		e.lbl.TextSize = State.BtnTextSize
+		e.shine.Visible = State.BtnShine
+		if s == "Sólido" then
+			e.g.Enabled = false; e.b.BackgroundColor3 = T.accent; e.b.BackgroundTransparency = 0; e.st.Enabled = false; e.lbl.TextColor3 = white
+		elseif s == "Vidro" then
+			e.g.Enabled = false; e.b.BackgroundColor3 = T.row; e.b.BackgroundTransparency = 0.1; e.st.Enabled = true; e.st.Thickness = 1; e.lbl.TextColor3 = T.text
+		elseif s == "Neon" then
+			e.g.Enabled = false; e.b.BackgroundColor3 = T.accent; e.b.BackgroundTransparency = 0.88; e.st.Enabled = true; e.st.Thickness = 2; e.lbl.TextColor3 = T.accent
+		else
+			e.g.Enabled = true; e.b.BackgroundColor3 = white; e.b.BackgroundTransparency = 0; e.st.Enabled = true; e.st.Thickness = 1; e.lbl.TextColor3 = white
+		end
+	end
+	restyleButtons = function() for _, e in ipairs(reg) do pcall(styleBtn, e) end end
+	Button = function(page, text, cb)
+		local h = new("CanvasGroup", {Size = UDim2.new(1, -4, 0, State.BtnH), BackgroundTransparency = 1, Parent = page})
+		local cr = new("UICorner", {CornerRadius = UDim.new(0, State.BtnCorner), Parent = h})
+		local st = new("UIStroke", {Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Enabled = false, Parent = h})
+		bind(st, "Color", "accent")
+		local sc = new("UIScale", {Parent = h})
+		local b = new("TextButton", {Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Parent = h})
+		local g = new("UIGradient", {Parent = b})
+		bind(g, "Color", function() return ColorSequence.new(T.accent, T.accent2) end, true)
+		local shine = new("Frame", {Size = UDim2.new(0, 36, 2, 0), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(-0.3, 0, 0.5, 0), Rotation = 18,
+			BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.8, BorderSizePixel = 0, Parent = b})
+		local lbl = mkText({Size = UDim2.fromScale(1, 1), Text = text, TextSize = State.BtnTextSize, TextColor3 = Color3.new(1, 1, 1), Parent = b}, true, false)
+		local e = {h = h, cr = cr, st = st, b = b, g = g, shine = shine, lbl = lbl}
+		table.insert(reg, e)
+		table.insert(binders, function() styleBtn(e) end)
+		styleBtn(e)
+		local function sweep()
+			if not State.BtnShine then return end
+			shine.Position = UDim2.new(-0.3, 0, 0.5, 0)
+			tween(shine, 0.7, {Position = UDim2.new(1.15, 0, 0.5, 0)}, Enum.EasingStyle.Quad)
+		end
+		b.MouseEnter:Connect(function() if State.BtnHover then tween(sc, 0.2, {Scale = 1.02}); sweep() end end)
+		b.MouseLeave:Connect(function() tween(sc, 0.2, {Scale = 1}) end)
+		b.MouseButton1Down:Connect(function() tween(sc, 0.08, {Scale = 0.96}) end)
+		b.MouseButton1Up:Connect(function() tween(sc, 0.25, {Scale = 1}, Enum.EasingStyle.Back) end)
+		b.MouseButton1Click:Connect(function()
+			sweep()
+			task.spawn(function() local ok, err = pcall(cb); if not ok then H.err(err); notify("Erro", tostring(err), 3, "error") end end)
+		end)
+		return h
+	end
+end
+
+local function Input(page, text, placeholder, cb)
+	local r = row(page, 42)
+	mkText({Size = UDim2.new(0.4, 0, 1, 0), Position = UDim2.fromOffset(14, 0), Text = text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = r}, false)
+	local box = mkText({Size = UDim2.new(0.6, -24, 0, 28), Position = UDim2.new(0.4, 6, 0.5, -14), Text = "", PlaceholderText = placeholder, TextSize = 13, ClearTextOnFocus = false, BackgroundColor3 = T.side, Parent = r}, false, "text", "TextBox")
+	box.BackgroundTransparency = 0.3
+	new("UICorner", {CornerRadius = UDim.new(0, 8), Parent = box})
+	bind(box, "BackgroundColor3", "side")
+	box.FocusLost:Connect(function(enter)
+		if enter and box.Text ~= "" then
+			local ok, err = pcall(cb, box.Text)
+			if not ok then H.err(err); notify("Erro", tostring(err), 3, "error") end
+			box.Text = ""
+		end
+	end)
+end
+
+local function Dropdown(page, text, options, key, cb)
+	local r = row(page, 42)
+	r.ClipsDescendants = true
+	local head = new("TextButton", {Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, Text = "", Parent = r})
+	mkText({Size = UDim2.new(0.5, 0, 0, 42), Position = UDim2.fromOffset(14, 0), Text = text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = r}, false)
+	local val = mkText({Size = UDim2.new(0.5, -40, 0, 42), Position = UDim2.new(0.5, 0, 0, 0), Text = tostring(State[key]), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Right, TextTruncate = Enum.TextTruncate.AtEnd, Parent = r}, true, "accent")
+	local arrow = mkText({Size = UDim2.fromOffset(20, 42), Position = UDim2.new(1, -30, 0, 0), Text = "▾", TextSize = 15, Parent = r}, true, "sub")
+	local list = new("Frame", {Size = UDim2.new(1, -16, 0, #options * 32), Position = UDim2.fromOffset(8, 46), BackgroundTransparency = 1, Parent = r}, {new("UIListLayout", {Padding = UDim.new(0, 3)})})
+	local open = false
+	syncers[key] = function() val.Text = tostring(State[key]) end
+	for _, o in ipairs(options) do
+		local b = mkText({Size = UDim2.new(1, 0, 0, 29), Text = o, TextSize = 13, BackgroundColor3 = T.side, AutoButtonColor = false, Parent = list}, false, "text", "TextButton")
+		b.BackgroundTransparency = 0.35
+		new("UICorner", {CornerRadius = UDim.new(0, 8), Parent = b})
+		bind(b, "BackgroundColor3", "side")
+		b.MouseButton1Click:Connect(function()
+			State[key] = o
+			val.Text = o
+			open = false
+			tween(r, 0.3, {Size = UDim2.new(1, -4, 0, 42)})
+			tween(arrow, 0.3, {Rotation = 0})
+			if cb then task.spawn(function() local ok, err = pcall(cb, o); if not ok then H.err(err); notify("Erro", tostring(err), 3, "error") end end) end
+		end)
+	end
+	head.MouseButton1Click:Connect(function()
+		open = not open
+		tween(r, 0.35, {Size = UDim2.new(1, -4, 0, open and (50 + #options * 32) or 42)})
+		tween(arrow, 0.35, {Rotation = open and 180 or 0})
+	end)
+end
+syncUI = function() for _, f in pairs(syncers) do pcall(f) end end
+
+------------------------------------------------------------------
+-- PARTÍCULAS
+------------------------------------------------------------------
+do
+	local PartShapes = {["Círculo"] = "●", ["Floco"] = "❄", ["Estrela"] = "✦", ["Coração"] = "♥", ["Flor"] = "✿", ["Ponto"] = "•", ["Diamante"] = "◆", ["Quadrado"] = "■", ["Linha"] = "│", ["Nota"] = "♪"}
+	local PartDirs = {["Cair"] = {0, 1}, ["Subir"] = {0, -1}, ["Diagonal →"] = {0.7, 0.7}, ["Diagonal ←"] = {-0.7, 0.7}, ["Esquerda → Direita"] = {1, 0}, ["Direita → Esquerda"] = {-1, 0}}
+	local PartPresets = {
+		Neve = {PartShape = "Círculo", PartCount = 55, PartSpeed = 35, PartSize = 9, PartTrans = 30, PartWind = 10, PartDir = "Cair", PartColor = "Branco", PartSpin = false, PartTwinkle = true},
+		Chuva = {PartShape = "Linha", PartCount = 90, PartSpeed = 230, PartSize = 14, PartTrans = 55, PartWind = -20, PartDir = "Cair", PartColor = "Tema", PartSpin = false, PartTwinkle = false},
+		Brasas = {PartShape = "Círculo", PartCount = 45, PartSpeed = 45, PartSize = 7, PartTrans = 20, PartWind = 10, PartDir = "Subir", PartColor = "Tema 2", PartSpin = false, PartTwinkle = true},
+		Confete = {PartShape = "Quadrado", PartCount = 70, PartSpeed = 75, PartSize = 9, PartTrans = 10, PartWind = 0, PartDir = "Cair", PartColor = "Arco-íris", PartSpin = true, PartTwinkle = false},
+		Estrelas = {PartShape = "Estrela", PartCount = 40, PartSpeed = 22, PartSize = 11, PartTrans = 20, PartWind = 0, PartDir = "Esquerda → Direita", PartColor = "Tema", PartSpin = false, PartTwinkle = true},
+		Sakura = {PartShape = "Flor", PartCount = 35, PartSpeed = 28, PartSize = 13, PartTrans = 15, PartWind = 25, PartDir = "Cair", PartColor = "Personalizada", PartR = 255, PartG = 150, PartB = 200, PartSpin = true, PartTwinkle = false},
+	}
+	H.PartShapes, H.PartPresets = PartShapes, PartPresets
+	H.PartShapeNames = {"Círculo", "Floco", "Estrela", "Coração", "Flor", "Ponto", "Diamante", "Quadrado", "Linha", "Nota"}
+	H.PartDirNames = {"Cair", "Subir", "Diagonal →", "Diagonal ←", "Esquerda → Direita", "Direita → Esquerda"}
+	H.PartPresetNames = {"Neve", "Chuva", "Brasas", "Confete", "Estrelas", "Sakura"}
+	local parts = {}
+	local function partColor(p)
+		local m = State.PartColor
+		if m == "Tema" then return T.accent
+		elseif m == "Tema 2" then return T.accent2
+		elseif m == "Misto" then return p.alt and T.accent or T.accent2
+		elseif m == "Arco-íris" then return Color3.fromHSV((p.h + tick() * 0.05) % 1, 0.6, 1)
+		elseif m == "Personalizada" then return Color3.fromRGB(State.PartR, State.PartG, State.PartB) end
+		return Color3.new(1, 1, 1)
+	end
+	local function addPart()
+		table.insert(parts, {
+			o = new("TextLabel", {AnchorPoint = Vector2.new(0.5, 0.5), BackgroundTransparency = 1, Size = UDim2.fromOffset(30, 30), Font = Enum.Font.GothamBold,
+				Text = PartShapes[State.PartShape] or "●", TextSize = State.PartSize, Active = false, Parent = partLayer}),
+			x = math.random() * State.PW, y = math.random() * State.PH, v = 0.55 + math.random() * 0.9, s = 0.5 + math.random() * 0.9,
+			ph = math.random() * 6.28, a = 4 + math.random() * 14, h = math.random(), alt = math.random() < 0.5, rs = (math.random() - 0.5) * 2,
+		})
+	end
+	H.refreshParts = function()
+		local tx = PartShapes[State.PartShape] or "●"
+		for _, p in ipairs(parts) do p.o.Text = tx end
+		partLayer.ZIndex = State.PartFront and 50 or 1
+	end
+	H.applyPartPreset = function(name)
+		local pr = PartPresets[name]
+		if not pr then return end
+		for k, v in pairs(pr) do State[k] = v end
+		syncUI()
+		H.refreshParts()
+	end
+	H.clearParts = function() for _, p in ipairs(parts) do p.o:Destroy() end parts = {} end
+	conn(RS.RenderStepped:Connect(function(dt)
+		H.frames = H.frames + 1
+		if not main.Visible then return end
+		if not State.PartOn then
+			if #parts > 0 then H.clearParts() end
+			return
+		end
+		local want = math.clamp(State.PartCount, 0, 200)
+		while #parts < want do addPart() end
+		while #parts > want do local p = table.remove(parts) p.o:Destroy() end
+		local d = PartDirs[State.PartDir] or PartDirs["Cair"]
+		local pw, ph, now, base = State.PW, State.PH, tick(), State.PartTrans / 100
+		for _, p in ipairs(parts) do
+			local sp = State.PartSpeed * p.v
+			p.x = p.x + (d[1] * sp + State.PartWind * p.v) * dt
+			p.y = p.y + d[2] * sp * dt
+			if p.y > ph + 20 then p.y = -20; p.x = math.random() * pw
+			elseif p.y < -20 then p.y = ph + 20; p.x = math.random() * pw end
+			if p.x > pw + 20 then p.x = -20; p.y = math.random() * ph
+			elseif p.x < -20 then p.x = pw + 20; p.y = math.random() * ph end
+			local o = p.o
+			o.Position = UDim2.fromOffset(p.x + math.sin(now * 1.3 + p.ph) * p.a, p.y)
+			o.TextSize = math.max(2, State.PartSize * p.s)
+			o.TextColor3 = partColor(p)
+			local tw = base
+			if State.PartTwinkle then tw = base + (1 - base) * 0.45 * (0.5 + 0.5 * math.sin(now * 2.2 + p.ph * 3)) end
+			o.TextTransparency = math.clamp(tw, 0, 1)
+			o.Rotation = State.PartSpin and (now * 50 * p.rs) % 360 or 0
+		end
+	end))
+end
+
+------------------------------------------------------------------
+-- LÓGICA DO JOGO (base)
+------------------------------------------------------------------
+local function root() local c = lp.Character return c and c:FindFirstChild("HumanoidRootPart") end
+local function hum() local c = lp.Character return c and c:FindFirstChildOfClass("Humanoid") end
+local function invoke(...)
+	local args = table.pack(...)
+	local rem = S.ReplicatedStorage:FindFirstChild("Remotes")
+	local cf = rem and rem:FindFirstChild("CommF_")
+	if not cf then return nil end
+	local ok, res = pcall(function() return cf:InvokeServer(table.unpack(args, 1, args.n)) end)
+	return ok and res or nil
+end
+local function loop(interval, fn)
+	task.spawn(function()
+		while alive do
+			task.wait(interval)
+			local ok, err = pcall(fn)
+			if not ok then H.err(err) end
+		end
+	end)
+end
+local function dataVal(n)
+	local ok, v = pcall(function() return lp.Data[n].Value end)
+	return ok and v or nil
+end
+local function commas(n)
+	n = tonumber(n) or 0
+	local s = tostring(math.floor(n))
+	local out = s:reverse():gsub("(%d%d%d)", "%1."):reverse()
+	return (out:gsub("^%.", ""))
+end
+local function anyAuto() for _, k in ipairs(H.autoKeys) do if State[k] then return true end end return false end
+local function goTo(cf)
+	if State.Fleeing and not State.ManualTravel then return end
+	local r = root()
+	if not r then return end
+	local d = (cf.Position - r.Position).Magnitude
+	if d < 80 then r.CFrame = cf return end
+	local t = d / math.max(State.TravelSpeed, 50)
+	local tw = TS:Create(r, TweenInfo.new(t, Enum.EasingStyle.Linear), {CFrame = cf})
+	local done = false
+	local c = tw.Completed:Connect(function() done = true end)
+	tw:Play()
+	local t0 = tick()
+	while not done and alive and tick() - t0 < t + 1 do
+		if not anyAuto() and not State.ManualTravel then tw:Cancel() break end
+		task.wait(0.05)
+	end
+	c:Disconnect()
+end
+local function hoverTo(pos)
+	if State.Fleeing then return end
+	local r = root()
+	if not r then return end
+	local tp = pos + Vector3.new(0, State.Height, 0)
+	if (tp - r.Position).Magnitude > 120 then goTo(CFrame.new(tp)) else r.CFrame = CFrame.new(tp, pos) end
+	r.AssemblyLinearVelocity = Vector3.zero
+end
+local function equipWeapon()
+	local c = lp.Character
+	if not c then return end
+	local cur = c:FindFirstChildOfClass("Tool")
+	if cur and cur.ToolTip == State.Weapon then return end
+	local bp = lp:FindFirstChild("Backpack")
+	if not bp then return end
+	for _, t in ipairs(bp:GetChildren()) do
+		if t:IsA("Tool") and t.ToolTip == State.Weapon then
+			local h = hum()
+			if h then h:EquipTool(t) end
+			return
+		end
+	end
+end
+local function nearestMob(name)
+	local r = root()
+	local folder = workspace:FindFirstChild("Enemies")
+	if not r or not folder then return end
+	local best, bd
+	for _, m in ipairs(folder:GetChildren()) do
+		if not name or m.Name == name then
+			local h, mr = m:FindFirstChildOfClass("Humanoid"), m:FindFirstChild("HumanoidRootPart")
+			if h and mr and h.Health > 0 then
+				local d = (mr.Position - r.Position).Magnitude
+				if not bd or d < bd then best, bd = mr, d end
+			end
+		end
+	end
+	return best
+end
+local function findFruit()
+	for _, v in ipairs(workspace:GetChildren()) do
+		if (v:IsA("Tool") or v:IsA("Model")) and v.Name:lower():find("fruit") and v:FindFirstChild("Handle") then return v end
+	end
+end
+local function findPlayer(n)
+	n = n:lower()
+	for _, p in ipairs(S.Players:GetPlayers()) do
+		if p ~= lp and (p.Name:lower():find(n, 1, true) or p.DisplayName:lower():find(n, 1, true)) then return p end
+	end
+end
+
+------------------------------------------------------------------
+-- QUESTS / MARES
+------------------------------------------------------------------
+do
+	local function Q(a, b, mob, qn, ql, qx, qy, qz, mx, my, mz)
+		return {min = a, max = b, mob = mob, qn = qn, ql = ql, q = Vector3.new(qx, qy, qz), m = Vector3.new(mx, my, mz)}
+	end
+	local Sea1 = {
+		Q(1, 9, "Bandit", "BanditQuest1", 1, 1059.37, 15.45, 1550.42, 1045.96, 27.00, 1560.00),
+		Q(10, 14, "Monkey", "JungleQuest", 1, -1598.09, 35.55, 153.38, -1448.52, 67.85, 11.47),
+		Q(15, 29, "Gorilla", "JungleQuest", 2, -1598.09, 35.55, 153.38, -1129.88, 40.46, -525.42),
+		Q(30, 39, "Pirate", "BuggyQuest1", 1, -1141.07, 4.10, 3831.55, -1103.51, 13.75, 3896.09),
+		Q(40, 59, "Brute", "BuggyQuest1", 2, -1141.07, 4.10, 3831.55, -1140.08, 14.81, 4322.92),
+		Q(60, 74, "Desert Bandit", "DesertQuest", 1, 896.51, 6.43, 4390.14, 984.99, 16.11, 4417.91),
+		Q(75, 89, "Desert Officer", "DesertQuest", 2, 896.51, 6.43, 4390.14, 1547.15, 14.45, 4381.00),
+		Q(90, 99, "Snow Bandit", "SnowQuest", 1, 1386.80, 87.27, -1298.35, 1356.30, 105.77, -1328.24),
+		Q(100, 119, "Snowman", "SnowQuest", 2, 1386.80, 87.27, -1298.35, 1218.80, 138.01, -1488.03),
+		Q(120, 149, "Chief Petty Officer", "MarineQuest2", 1, -5035.49, 28.67, 4324.18, -4931.15, 65.79, 4121.83),
+		Q(150, 174, "Sky Bandit", "SkyQuest", 1, -4842.13, 717.69, -2623.04, -4955.64, 365.46, -2908.18),
+		Q(175, 189, "Dark Master", "SkyQuest", 2, -4842.13, 717.69, -2623.04, -5148.16, 439.04, -2332.96),
+		Q(190, 209, "Prisoner", "PrisonerQuest", 1, 5310.60, 0.35, 474.94, 5098.97, -0.32, 474.23),
+		Q(210, 249, "Dangerous Prisoner", "PrisonerQuest", 2, 5310.60, 0.35, 474.94, 5654.56, 15.63, 866.30),
+		Q(250, 274, "Toga Warrior", "ColosseumQuest", 1, -1580.04, 6.35, -2986.47, -1820.21, 51.68, -2740.66),
+		Q(275, 299, "Gladiator", "ColosseumQuest", 2, -1580.04, 6.35, -2986.47, -1292.84, 56.38, -3339.03),
+		Q(300, 324, "Military Soldier", "MagmaQuest", 1, -5313.37, 10.95, 8515.29, -5411.16, 11.08, 8454.29),
+		Q(325, 374, "Military Spy", "MagmaQuest", 2, -5313.37, 10.95, 8515.29, -5802.87, 86.26, 8828.86),
+		Q(375, 399, "Fishman Warrior", "FishmanQuest", 1, 61122.65, 18.50, 1569.40, 60878.30, 18.48, 1543.76),
+		Q(400, 449, "Fishman Commando", "FishmanQuest", 2, 61122.65, 18.50, 1569.40, 61922.63, 18.48, 1493.93),
+		Q(450, 474, "God's Guard", "SkyExp1Quest", 1, -4721.89, 845.28, -1953.84, -4628.05, 866.93, -1931.24),
+		Q(475, 524, "Shanda", "SkyExp1Quest", 2, -7859.09, 5544.19, -381.48, -7685.12, 5601.08, -441.38),
+		Q(525, 549, "Royal Squad", "SkyExp2Quest", 1, -7906.82, 5634.66, -1411.99, -7654.25, 5637.10, -1407.75),
+		Q(550, 624, "Royal Soldier", "SkyExp2Quest", 2, -7906.82, 5634.66, -1411.99, -7760.41, 5679.90, -1884.81),
+		Q(625, 649, "Galley Pirate", "FountainQuest", 1, 5259.82, 37.35, 4050.03, 5551.02, 78.90, 3930.41),
+		Q(650, 699, "Galley Captain", "FountainQuest", 2, 5259.82, 37.35, 4050.03, 5441.95, 42.50, 4950.09),
+	}
+	local Sea2 = {
+		Q(700, 724, "Raider", "Area1Quest", 1, -427.72, 72.99, 1835.94, 68.87, 93.63, 2429.67),
+		Q(725, 774, "Mercenary", "Area1Quest", 2, -427.72, 72.99, 1835.94, -864.85, 122.47, 1453.15),
+		Q(775, 799, "Swan Pirate", "Area2Quest", 1, 635.61, 73.10, 917.81, 1065.36, 137.64, 1324.37),
+		Q(800, 874, "Factory Staff", "Area2Quest", 2, 635.61, 73.10, 917.81, 533.22, 128.47, 355.62),
+		Q(875, 899, "Marine Lieutenant", "MarineQuest3", 1, -2440.79, 71.71, -3216.07, -2489.26, 84.61, -3151.88),
+		Q(900, 949, "Marine Captain", "MarineQuest3", 2, -2440.79, 71.71, -3216.07, -2335.20, 79.79, -3245.87),
+		Q(950, 974, "Zombie", "ZombieQuest", 1, -5494.34, 48.50, -794.59, -5536.50, 101.08, -836.83),
+		Q(975, 999, "Vampire", "ZombieQuest", 2, -5494.34, 48.50, -794.59, -5806.98, 16.72, -1164.43),
+		Q(1000, 1049, "Snow Trooper", "SnowMountainQuest", 1, 607.06, 401.44, -5370.55, 535.21, 432.74, -5484.92),
+		Q(1050, 1099, "Winter Warrior", "SnowMountainQuest", 2, 607.06, 401.44, -5370.55, 1234.44, 456.95, -5174.13),
+		Q(1100, 1124, "Lab Subordinate", "IceSideQuest", 1, -6061.84, 15.93, -4902.03, -5720.55, 63.31, -4784.61),
+		Q(1125, 1174, "Horned Warrior", "IceSideQuest", 2, -6061.84, 15.93, -4902.03, -6292.75, 91.18, -5502.65),
+		Q(1175, 1199, "Magma Ninja", "FireSideQuest", 1, -5429.04, 15.97, -5297.96, -5461.84, 130.36, -5836.47),
+		Q(1200, 1249, "Lava Pirate", "FireSideQuest", 2, -5429.04, 15.97, -5297.96, -5251.18, 55.16, -4774.40),
+		Q(1250, 1274, "Ship Deckhand", "ShipQuest1", 1, 1037.80, 125.09, 32911.60, 1212.01, 150.79, 33059.24),
+		Q(1275, 1299, "Ship Engineer", "ShipQuest1", 2, 1037.80, 125.09, 32911.60, 919.47, 43.54, 32779.96),
+		Q(1300, 1324, "Ship Steward", "ShipQuest2", 1, 968.80, 125.09, 33244.12, 919.43, 129.55, 33436.03),
+		Q(1325, 1349, "Ship Officer", "ShipQuest2", 2, 968.80, 125.09, 33244.12, 1036.01, 181.43, 33315.72),
+		Q(1350, 1374, "Arctic Warrior", "FrostQuest", 1, 5668.13, 28.52, -6483.33, 5935.45, 77.26, -6472.75),
+		Q(1375, 1424, "Snow Lurker", "FrostQuest", 2, 5668.13, 28.52, -6483.33, 5628.48, 57.57, -6618.34),
+		Q(1425, 1449, "Sea Soldier", "ForgottenQuest", 1, -3054.58, 236.87, -10147.78, -3185.01, 58.78, -9663.60),
+		Q(1450, 1499, "Water Fighter", "ForgottenQuest", 2, -3054.58, 236.87, -10147.78, -3262.93, 298.69, -10552.53),
+	}
+	local Sea3 = {
+		Q(1500, 1524, "Pirate Millionaire", "PiratePortQuest", 1, -290.07, 42.90, 5581.59, -245.99, 47.31, 5584.10),
+		Q(1525, 1574, "Pistol Billionaire", "PiratePortQuest", 2, -290.07, 42.90, 5581.59, -187.33, 86.24, 6013.51),
+		Q(1575, 1599, "Dragon Crew Warrior", "AmazonQuest", 1, 5832.83, 51.69, -1101.51, 6141.14, 51.35, -1340.74),
+		Q(1600, 1624, "Dragon Crew Archer", "AmazonQuest", 2, 5832.83, 51.69, -1101.51, 6616.42, 441.77, 446.04),
+		Q(1625, 1649, "Female Islander", "AmazonQuest2", 1, 5448.86, 601.52, 751.13, 4685.26, 735.80, 815.34),
+		Q(1650, 1699, "Giant Islander", "AmazonQuest2", 2, 5448.86, 601.52, 751.13, 4729.09, 590.44, -36.97),
+		Q(1700, 1724, "Marine Commodore", "MarineTreeIsland", 1, 2179.99, 28.73, -6740.06, 2286.00, 73.13, -7159.81),
+		Q(1725, 1774, "Marine Rear Admiral", "MarineTreeIsland", 2, 2179.99, 28.73, -6740.06, 3656.77, 160.52, -7001.60),
+		Q(1775, 1799, "Fishman Raider", "DeepForestIsland3", 1, -10581.66, 330.87, -8761.19, -10407.53, 331.76, -8368.52),
+		Q(1800, 1824, "Fishman Captain", "DeepForestIsland3", 2, -10581.66, 330.87, -8761.19, -10994.70, 352.38, -9002.11),
+		Q(1825, 1849, "Forest Pirate", "DeepForestIsland", 1, -13234.04, 331.49, -7625.40, -13274.48, 332.38, -7769.58),
+		Q(1850, 1899, "Mythological Pirate", "DeepForestIsland", 2, -13234.04, 331.49, -7625.40, -13680.61, 501.08, -6991.19),
+		Q(1900, 1924, "Jungle Pirate", "DeepForestIsland2", 1, -12680.38, 389.97, -9902.02, -12256.16, 331.74, -10485.84),
+		Q(1925, 1974, "Musketeer Pirate", "DeepForestIsland2", 2, -12680.38, 389.97, -9902.02, -13457.90, 391.55, -9859.18),
+		Q(1975, 1999, "Reborn Skeleton", "HauntedQuest1", 1, -9479.22, 141.22, 5566.09, -8763.72, 165.72, 6159.86),
+		Q(2000, 2024, "Living Zombie", "HauntedQuest1", 2, -9479.22, 141.22, 5566.09, -10144.13, 138.63, 5838.09),
+		Q(2025, 2049, "Demonic Soul", "HauntedQuest2", 1, -9516.99, 178.01, 6078.99, -9505.87, 172.10, 6158.99),
+		Q(2050, 2074, "Posessed Mummy", "HauntedQuest2", 2, -9516.99, 178.01, 6078.99, -9582.02, 6.25, 6205.48),
+		Q(2075, 2099, "Peanut Scout", "NutsIslandQuest", 1, -2104.39, 38.13, -10194.22, -2143.24, 47.72, -10029.99),
+		Q(2100, 2124, "Peanut President", "NutsIslandQuest", 2, -2104.39, 38.13, -10194.22, -1859.35, 38.10, -10422.43),
+		Q(2125, 2149, "Ice Cream Chef", "IceCreamIslandQuest", 1, -820.65, 65.82, -10965.80, -872.24, 65.82, -10919.96),
+		Q(2150, 2199, "Ice Cream Commander", "IceCreamIslandQuest", 2, -820.65, 65.82, -10965.80, -558.06, 112.05, -11290.77),
+		Q(2200, 2224, "Cookie Crafter", "CakeQuest1", 1, -2021.32, 37.80, -12028.73, -2374.14, 37.80, -12125.30),
+		Q(2225, 2249, "Cake Guard", "CakeQuest1", 2, -2021.32, 37.80, -12028.73, -1598.31, 43.77, -12244.58),
+		Q(2250, 2274, "Baking Staff", "CakeQuest2", 1, -1927.92, 37.80, -12842.54, -1887.80, 77.62, -12998.35),
+		Q(2275, 2299, "Head Baker", "CakeQuest2", 2, -1927.92, 37.80, -12842.54, -2216.19, 82.88, -12869.29),
+		Q(2300, 2324, "Cocoa Warrior", "ChocQuest1", 1, 233.22, 29.88, -12201.23, -21.55, 80.57, -12352.38),
+		Q(2325, 2349, "Chocolate Bar Battler", "ChocQuest1", 2, 233.22, 29.88, -12201.23, 582.59, 77.19, -12463.16),
+		Q(2350, 2374, "Sweet Thief", "ChocQuest2", 1, 148.65, 29.88, -12204.59, 165.18, 76.06, -12600.83),
+		Q(2375, 2399, "Candy Rebel", "ChocQuest2", 2, 148.65, 29.88, -12204.59, 134.86, 77.25, -12876.54),
+	}
+	H.Seas = {Sea1, Sea2, Sea3}
+	H.seaIndex = function()
+		local id = game.PlaceId
+		if id == 2753915549 then return 1 elseif id == 4442272183 then return 2 elseif id == 7449423635 then return 3 end
+		local lvl = dataVal("Level") or 1
+		if lvl >= 1500 then return 3 elseif lvl >= 700 then return 2 end
+		return 1
+	end
+	H.seaTable = function() return H.Seas[H.seaIndex()] end
+	H.questFor = function(lvl)
+		for _, e in ipairs(H.seaTable()) do if lvl >= e.min and lvl <= e.max then return e end end
+	end
+	H.mobInfo = {}
+	for si, tb in ipairs(H.Seas) do for _, e in ipairs(tb) do H.mobInfo[e.mob] = {e = e, sea = si} end end
+	H.ZoneNames, H.ZoneMap, H.NPCNames, H.NPCMap = {}, {}, {}, {}
+	for _, e in ipairs(H.seaTable()) do
+		if e.ql == 1 then
+			local label = e.mob .. " (Lv " .. e.min .. ")"
+			table.insert(H.ZoneNames, label); H.ZoneMap[label] = e
+			local nl = "NPC " .. e.qn .. " (Lv " .. e.min .. ")"
+			table.insert(H.NPCNames, nl); H.NPCMap[nl] = e
+		end
+	end
+	if State.Zone == "" and H.ZoneNames[1] then State.Zone = H.ZoneNames[1] end
+	if State.NPC == "" and H.NPCNames[1] then State.NPC = H.NPCNames[1] end
+end
+
+------------------------------------------------------------------
+-- FARM / AUTO / CÓDIGOS
+------------------------------------------------------------------
+do
+	local lastQuest, lastAbandon = 0, 0
+	local function questVisible() local ok, v = pcall(function() return lp.PlayerGui.Main.Quest.Visible end) return ok and v end
+	local function questTitle() local ok, v = pcall(function() return lp.PlayerGui.Main.Quest.Container.QuestTitle.Title.Text end) return ok and tostring(v) or "" end
+	loop(0.1, function()
+		if not State.AutoLevel then return end
+		local r = root()
+		if not r then return end
+		if State.AutoEquip then equipWeapon() end
+		local e = H.questFor(dataVal("Level") or 1)
+		if not e then
+			local t = nearestMob()
+			if t then hoverTo(t.Position) end
+			return
+		end
+		local vis = questVisible()
+		if vis and not questTitle():lower():find(e.mob:sub(1, 5):lower(), 1, true) and tick() - lastAbandon > 15 then
+			invoke("AbandonQuest")
+			lastAbandon = tick()
+			vis = false
+		end
+		if not vis then
+			if tick() - lastQuest > 1.5 and not State.Fleeing then
+				goTo(CFrame.new(e.q + Vector3.new(0, 3, 0)))
+				task.wait(0.3)
+				invoke("StartQuest", e.qn, e.ql)
+				lastQuest = tick()
+			end
+			return
+		end
+		local t = nearestMob(e.mob)
+		if t then hoverTo(t.Position) else goTo(CFrame.new(e.m + Vector3.new(0, State.Height, 0))) end
+	end)
+	loop(0.02, function()
+		if not State.Farm or State.AutoLevel or not root() then return end
+		if State.AutoEquip then equipWeapon() end
+		local t = nearestMob()
+		if t then hoverTo(t.Position) end
+	end)
+	H.Bosses = {"Saber Expert", "The Gorilla King", "Bobby", "Yeti", "Vice Admiral", "Warden", "Chief Warden", "Swan", "Magma Admiral",
+		"Fishman Lord", "Wysper", "Thunder God", "Cyborg", "Diamond", "Jeremy", "Fajita", "Don Swan", "Smoke Admiral", "Awakened Ice Admiral",
+		"Tide Keeper", "Stone", "Island Empress", "Kilo Admiral", "Captain Elephant", "Beautiful Pirate", "Cake Queen", "Longma", "Soul Reaper"}
+	loop(0.05, function()
+		if not State.AutoBoss or State.AutoLevel or not root() then return end
+		if State.AutoEquip then equipWeapon() end
+		local t = nearestMob(State.Boss)
+		if t then hoverTo(t.Position) end
+	end)
+	task.spawn(function()
+		while alive do
+			task.wait(math.max(State.ClickDelay, 20) / 1000)
+			if State.Click or State.Farm or State.AutoLevel or State.AutoBoss or State.MatFarm or State.AutoRaid or State.AutoSea then
+				pcall(function() S.VirtualUser:CaptureController(); S.VirtualUser:ClickButton1(Vector2.new(900, 500)) end)
+			end
+		end
+	end)
+	loop(0.3, function()
+		if not State.Chest then return end
+		local r = root()
+		if not r then return end
+		local best, bd
+		for _, c in ipairs(S.CollectionService:GetTagged("_ChestTagged")) do
+			if c.Parent then
+				local p = c:GetPivot().Position
+				local d = (p - r.Position).Magnitude
+				if not bd or d < bd then best, bd = p, d end
+			end
+		end
+		if best then goTo(CFrame.new(best + Vector3.new(0, 2, 0))) end
+	end)
+	loop(0.6, function()
+		if not State.FruitGrab then return end
+		local f = findFruit()
+		if f then goTo(f.Handle.CFrame) end
+	end)
+	loop(1.5, function()
+		if State.Buso and lp.Character and not lp.Character:FindFirstChild("HasBuso") then invoke("Buso") end
+	end)
+	loop(4, function()
+		if State.Ken then
+			local rem = S.ReplicatedStorage:FindFirstChild("Remotes")
+			local ce = rem and rem:FindFirstChild("CommE")
+			if ce then ce:FireServer("Ken", true) end
+		end
+	end)
+	loop(1, function() if State.AutoStats then invoke("AddPoint", State.Stat, State.StatPoints) end end)
+
+	-- Blox+ : puxar mobs, skills, fuga, frutas
+	loop(0.15, function()
+		if not State.BringMob then return end
+		local anchor, folder = nearestMob(), workspace:FindFirstChild("Enemies")
+		if not anchor or not folder then return end
+		pcall(function() sethiddenproperty(lp, "SimulationRadius", math.huge) end)
+		local base = anchor.Parent
+		for _, m in ipairs(folder:GetChildren()) do
+			if m ~= base and m.Name == base.Name then
+				local mr, h = m:FindFirstChild("HumanoidRootPart"), m:FindFirstChildOfClass("Humanoid")
+				if mr and h and h.Health > 0 and (mr.Position - anchor.Position).Magnitude <= State.BringRange then
+					mr.CFrame = anchor.CFrame
+					mr.CanCollide = false
+					mr.AssemblyLinearVelocity = Vector3.zero
+				end
+			end
+		end
+	end)
+	task.spawn(function()
+		while alive do
+			task.wait(math.max(State.SkillDelay, 150) / 1000)
+			if anyAuto() or State.Click then
+				for _, k in ipairs({"Z", "X", "C", "V", "F"}) do
+					if State["Skill" .. k] then
+						pcall(function()
+							S.VirtualInputManager:SendKeyEvent(true, Enum.KeyCode[k], false, game)
+							task.wait(0.05)
+							S.VirtualInputManager:SendKeyEvent(false, Enum.KeyCode[k], false, game)
+						end)
+					end
+				end
+			end
+		end
+	end)
+	loop(0.2, function()
+		if not State.FleeOn then State.Fleeing = false return end
+		local h, r = hum(), root()
+		if not h or not r then return end
+		local pct = h.Health / math.max(h.MaxHealth, 1) * 100
+		if not State.Fleeing and pct < State.FleeHP and anyAuto() then
+			State.Fleeing = true
+			r.CFrame = r.CFrame + Vector3.new(0, 220, 0)
+			notify("Fuga", "Vida baixa! Subindo pra se curar.", 2.5, "warn")
+		elseif State.Fleeing and pct >= 85 then
+			State.Fleeing = false
+			notify("Fuga", "Vida recuperada, voltando!", 2, "ok")
+		end
+	end)
+	loop(5, function() if State.AutoRandomFruit then invoke("Cousin", "Buy") end end)
+	H.storeFruits = function()
+		local n = 0
+		for _, container in ipairs({lp:FindFirstChild("Backpack"), lp.Character}) do
+			if container then
+				for _, t in ipairs(container:GetChildren()) do
+					if t:IsA("Tool") and t.Name:find("Fruit") then
+						local fname = t:GetAttribute("OriginalName")
+						if fname then invoke("StoreFruit", fname, t); n = n + 1 end
+					end
+				end
+			end
+		end
+		return n
+	end
+	loop(6, function() if State.AutoStore then H.storeFruits() end end)
+
+	-- códigos
+	H.CodeList = {"Sub2UncleKizaru", "Sub2Fer999", "Enyu_is_Pro", "Magicbus", "JCWK", "Starcodeheo", "Bluxxy", "fudd10", "FUDD10_V2",
+		"Bignews", "TheGreatAce", "Sub2NoobMaster123", "Sub2Daigrock", "Axiore", "StrawHatMaine", "KITT_RESET", "Sub2OfficialNoobie",
+		"NOMOREHACK", "BANEXPLOIT", "TRIPLEABUSE", "NEWTROLL", "CODE_SERVICE", "SECRET_ADMIN", "3BVISITS", "2BILLION", "1MLIKES"}
+	local codeLines, redeeming = {}, false
+	local function logCode(line)
+		table.insert(codeLines, line)
+		while #codeLines > 7 do table.remove(codeLines, 1) end
+		if H.codeLog then H.codeLog.Text = table.concat(codeLines, "\n") end
+	end
+	H.redeemOne = function(code)
+		local rem = S.ReplicatedStorage:FindFirstChild("Remotes")
+		local rd = rem and rem:FindFirstChild("Redeem")
+		if not rd then logCode(code .. " → remote não encontrado") return end
+		local ok, res = pcall(function() return rd:InvokeServer(code) end)
+		logCode(code .. " → " .. string.sub(ok and tostring(res) or "falhou", 1, 34))
+	end
+	H.redeemAll = function()
+		if redeeming then return end
+		redeeming = true
+		notify("Códigos", "Resgatando " .. #H.CodeList .. " códigos...", 3)
+		for _, c in ipairs(H.CodeList) do
+			if not alive then break end
+			H.redeemOne(c)
+			task.wait(1.4)
+		end
+		redeeming = false
+		notify("Códigos", "Terminei! Veja o log na aba Auto.", 3, "ok")
+	end
+end
+
+------------------------------------------------------------------
+-- ESP
+------------------------------------------------------------------
+do
+	local espFolder = new("Folder", {Name = "ESP", Parent = gui})
+	local espCache = {}
+	local function syncESP(kind, on, targets)
+		espCache[kind] = espCache[kind] or {}
+		local cache, seen = espCache[kind], {}
+		if on then
+			for _, t in ipairs(targets()) do
+				seen[t.inst] = true
+				local e = cache[t.inst]
+				if not e then
+					local hl = new("Highlight", {Adornee = t.inst, FillTransparency = 0.65, OutlineTransparency = 0, FillColor = t.color, OutlineColor = t.color, DepthMode = Enum.HighlightDepthMode.AlwaysOnTop, Parent = espFolder})
+					local bb = new("BillboardGui", {Adornee = t.part, Size = UDim2.fromOffset(150, 28), AlwaysOnTop = true, StudsOffset = Vector3.new(0, 3, 0), Parent = espFolder})
+					local lb = new("TextLabel", {Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, TextColor3 = t.color, TextStrokeTransparency = 0.4, TextSize = 13, Font = Enum.Font.GothamBold, Parent = bb})
+					e = {hl, bb, lb}
+					cache[t.inst] = e
+				end
+				e[3].Text = t.text
+			end
+		end
+		for inst, e in pairs(cache) do
+			if not seen[inst] or not inst.Parent then
+				pcall(function() e[1]:Destroy(); e[2]:Destroy() end)
+				cache[inst] = nil
+			end
+		end
+	end
+	local function dist(p) local r = root() return r and math.floor((p - r.Position).Magnitude) or 0 end
+	loop(0.5, function()
+		syncESP("players", State.ESPPlayers, function()
+			local list = {}
+			for _, p in ipairs(S.Players:GetPlayers()) do
+				local c = p.Character
+				local hr, h = c and c:FindFirstChild("HumanoidRootPart"), c and c:FindFirstChildOfClass("Humanoid")
+				if p ~= lp and hr and h then
+					table.insert(list, {inst = c, part = hr, color = Color3.fromRGB(255, 85, 85), text = p.DisplayName .. " [" .. dist(hr.Position) .. "m] " .. math.floor(h.Health) .. "HP"})
+				end
+			end
+			return list
+		end)
+		syncESP("fruits", State.ESPFruits, function()
+			local list = {}
+			for _, v in ipairs(workspace:GetChildren()) do
+				if (v:IsA("Tool") or v:IsA("Model")) and v.Name:lower():find("fruit") and v:FindFirstChild("Handle") then
+					table.insert(list, {inst = v, part = v.Handle, color = Color3.fromRGB(255, 196, 60), text = v.Name .. " [" .. dist(v.Handle.Position) .. "m]"})
+				end
+			end
+			return list
+		end)
+		syncESP("chests", State.ESPChests, function()
+			local list = {}
+			for _, c in ipairs(S.CollectionService:GetTagged("_ChestTagged")) do
+				if c.Parent then
+					local part = c:IsA("BasePart") and c or c:FindFirstChildWhichIsA("BasePart", true)
+					if part then table.insert(list, {inst = c, part = part, color = Color3.fromRGB(90, 220, 255), text = "Baú [" .. dist(part.Position) .. "m]"}) end
+				end
+			end
+			return list
+		end)
+		syncESP("mobs", State.ESPMobs, function()
+			local list, r, folder = {}, root(), workspace:FindFirstChild("Enemies")
+			if folder and r then
+				local arr = {}
+				for _, m in ipairs(folder:GetChildren()) do
+					local mr, h = m:FindFirstChild("HumanoidRootPart"), m:FindFirstChildOfClass("Humanoid")
+					if mr and h and h.Health > 0 then table.insert(arr, {m = m, mr = mr, d = (mr.Position - r.Position).Magnitude}) end
+				end
+				table.sort(arr, function(a, b) return a.d < b.d end)
+				for i = 1, math.min(#arr, 15) do
+					local e = arr[i]
+					table.insert(list, {inst = e.m, part = e.mr, color = Color3.fromRGB(255, 150, 60), text = e.m.Name .. " [" .. math.floor(e.d) .. "m]"})
+				end
+			end
+			return list
+		end)
+	end)
+end
+
+------------------------------------------------------------------
+-- AMBIENTE / PLAYER / SISTEMA
+------------------------------------------------------------------
+do
+	local Lighting = S.Lighting
+	local orig = {Brightness = Lighting.Brightness, FogEnd = Lighting.FogEnd, GlobalShadows = Lighting.GlobalShadows, Ambient = Lighting.Ambient, OutdoorAmbient = Lighting.OutdoorAmbient}
+	H.applyLight = function()
+		if State.Fullbright then
+			Lighting.Brightness = 2; Lighting.GlobalShadows = false
+			Lighting.Ambient = Color3.fromRGB(200, 200, 200); Lighting.OutdoorAmbient = Color3.fromRGB(200, 200, 200)
+		else
+			Lighting.Brightness = orig.Brightness; Lighting.GlobalShadows = orig.GlobalShadows
+			Lighting.Ambient = orig.Ambient; Lighting.OutdoorAmbient = orig.OutdoorAmbient
+		end
+		Lighting.FogEnd = State.NoFog and 1e6 or orig.FogEnd
+	end
+	local waterOrig
+	H.applyWater = function()
+		pcall(function()
+			local w = workspace.Map["WaterBase-Plane"]
+			waterOrig = waterOrig or w.Size
+			w.Size = State.Water and Vector3.new(1000, 112, 1000) or waterOrig
+		end)
+	end
+	H.boostFPS = function()
+		pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
+		Lighting.GlobalShadows = false
+		for _, d in ipairs(workspace:GetDescendants()) do
+			if d:IsA("ParticleEmitter") or d:IsA("Trail") or d:IsA("Smoke") or d:IsA("Fire") or d:IsA("Sparkles") then d.Enabled = false
+			elseif d:IsA("BasePart") then d.CastShadow = false end
+		end
+		notify("FPS", "Modo desempenho ativado!", 2.5, "ok")
+	end
+	local flyBV, holdBV
+	local function stopFly() if flyBV then flyBV:Destroy() flyBV = nil end end
+	local function stopHold() if holdBV then holdBV:Destroy() holdBV = nil end end
+	H.stopMove = function() stopFly() stopHold() end
+	conn(RS.Heartbeat:Connect(function()
+		local c, h, r = lp.Character, hum(), root()
+		if not c or not h or not r then return end
+		if State.SpeedOn then h.WalkSpeed = State.Speed end
+		if State.JumpOn then h.UseJumpPower = true; h.JumpPower = State.Jump end
+		if State.Fly then
+			stopHold()
+			if not flyBV or flyBV.Parent ~= r then
+				stopFly()
+				flyBV = Instance.new("BodyVelocity")
+				flyBV.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+				flyBV.Velocity = Vector3.zero
+				flyBV.Parent = r
+			end
+			local md, look = h.MoveDirection, cam.CFrame.LookVector
+			local vel = md * State.FlySpeed
+			if md.Magnitude > 0 then
+				local s = md:Dot(Vector3.new(look.X, 0, look.Z))
+				vel = vel + Vector3.new(0, look.Y * State.FlySpeed * (s >= 0 and 1 or -1), 0)
+			end
+			flyBV.Velocity = vel
+		else
+			stopFly()
+			if anyAuto() then
+				if not holdBV or holdBV.Parent ~= r then
+					stopHold()
+					holdBV = Instance.new("BodyVelocity")
+					holdBV.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+					holdBV.Velocity = Vector3.zero
+					holdBV.Parent = r
+				end
+			else stopHold() end
+		end
+	end))
+	conn(RS.Stepped:Connect(function()
+		if (State.Noclip or anyAuto()) and lp.Character then
+			for _, p in ipairs(lp.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end
+		end
+	end))
+	conn(UIS.JumpRequest:Connect(function()
+		if State.InfJump then local h = hum() if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end end
+	end))
+	conn(lp.Idled:Connect(function() S.VirtualUser:CaptureController(); S.VirtualUser:ClickButton1(Vector2.new()) end))
+	conn(S.GuiService.ErrorMessageChanged:Connect(function()
+		if State.AutoRejoin then task.wait(2); pcall(function() S.TeleportService:Teleport(game.PlaceId, lp) end) end
+	end))
+
+	local origFonts = setmetatable({}, {__mode = "k"})
+	local function applyGameFont(inst)
+		if inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox") then
+			if origFonts[inst] == nil then origFonts[inst] = inst.Font end
+			if State.GameFont == "Padrão" then inst.Font = origFonts[inst]
+			else inst.Font = getFont(State.GameFont, tostring(origFonts[inst]):find("Bold") ~= nil) end
+		end
+	end
+	H.refreshGameFont = function()
+		local pg = lp:FindFirstChild("PlayerGui")
+		if not pg then return end
+		for _, d in ipairs(pg:GetDescendants()) do pcall(applyGameFont, d) end
+	end
+	conn(lp:WaitForChild("PlayerGui").DescendantAdded:Connect(function(d)
+		if State.GameFont ~= "Padrão" then task.defer(pcall, applyGameFont, d) end
+	end))
+	H.serverHop = function()
+		notify("Server Hop", "Procurando servidor...", 3)
+		local ok, data = pcall(function()
+			return S.HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
+		end)
+		if ok and data and data.data then
+			for _, s in ipairs(data.data) do
+				if s.id ~= game.JobId and s.playing < s.maxPlayers - 1 then S.TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id, lp) return end
+			end
+		end
+		notify("Server Hop", "Nenhum servidor encontrado.", 3, "warn")
+	end
+	H.save = function(silent)
+		local c = {}
+		for _, k in ipairs(SAVE_KEYS) do
+			if H.compactSaved and H.compactSaved[k] ~= nil then c[k] = H.compactSaved[k] else c[k] = State[k] end
+		end
+		H.db.cfg = c
+		local ok = pcall(function() writefile(FILE, S.HttpService:JSONEncode(H.db)) end)
+		if not silent then notify("Config", ok and "Configuração salva!" or "Seu executor não permite salvar arquivos.", 3, ok and "ok" or "warn") end
+		return ok
+	end
+	H.reset = function()
+		pcall(function() if isfile(FILE) then delfile(FILE) end end)
+		notify("Config", "Config apagada. Reexecute o script.", 3, "warn")
+	end
+end
+
+------------------------------------------------------------------
+-- APARÊNCIA + PRESETS
+------------------------------------------------------------------
+do
+	applyAppearance = function()
+		main.Size = UDim2.fromOffset(State.PW, State.PH)
+		main.BackgroundTransparency = State.Opacity / 100
+		setCorners()
+		glow.BackgroundTransparency = 1 - State.Glow / 100
+		for _, s in ipairs(strokeList) do s.Enabled = State.Borders end
+		mainStroke.Enabled = State.Borders and State.BorderThick > 0
+		mainStroke.Thickness = math.max(State.BorderThick, 0.1)
+		mainStroke.Transparency = State.BorderOpacity / 100
+		mainStrokeG.Enabled = (State.BorderMode == "Gradiente")
+		strokeColorBinder(0)
+		topLine.Visible = State.TopLine
+		topLine.Size = UDim2.new(1, 0, 0, State.TopLineH)
+		for _, c in ipairs(cards) do c.BackgroundTransparency = State.CardTrans / 100 end
+		for _, l in ipairs(pageLists) do l.Padding = UDim.new(0, State.ListPad) end
+		updateBlur()
+		relayout()
+		restyleButtons()
+	end
+	local Presets = {
+		["Padrão"] = {Opacity = 0, Corner = 16, Glow = 14, Borders = true, BorderThick = 1, BorderOpacity = 70, BorderMode = "Gradiente", CardTrans = 20, TopLine = true, TopLineH = 3, Blur = false, Theme = "Midnight"},
+		["Vidro"] = {Opacity = 25, Corner = 22, Glow = 14, Borders = true, BorderThick = 1, BorderOpacity = 60, BorderMode = "Gradiente", CardTrans = 45, TopLine = true, TopLineH = 2, Blur = true, Theme = "Ice"},
+		["Neon"] = {Opacity = 5, Corner = 10, Glow = 30, Borders = true, BorderThick = 2, BorderOpacity = 0, BorderMode = "Gradiente", CardTrans = 30, TopLine = true, TopLineH = 4, Blur = false, Theme = "Cyberpunk"},
+		["Minimalista"] = {Opacity = 0, Corner = 8, Glow = 0, Borders = true, BorderThick = 1, BorderOpacity = 90, BorderMode = "Tema", CardTrans = 0, TopLine = false, TopLineH = 2, Blur = false, Theme = "AMOLED"},
+		["Fofo"] = {Opacity = 0, Corner = 28, Glow = 22, Borders = true, BorderThick = 2, BorderOpacity = 40, BorderMode = "Destaque", CardTrans = 20, TopLine = true, TopLineH = 5, Blur = false, Theme = "Sakura"},
+		["Hacker"] = {Opacity = 0, Corner = 0, Glow = 8, Borders = true, BorderThick = 1, BorderOpacity = 30, BorderMode = "Destaque", CardTrans = 10, TopLine = true, TopLineH = 2, Blur = false, Theme = "Matrix"},
+		["Premium Ouro"] = {Opacity = 4, Corner = 18, Glow = 20, Borders = true, BorderThick = 2, BorderOpacity = 35, BorderMode = "Gradiente", CardTrans = 25, TopLine = true, TopLineH = 4, Blur = false, Theme = "Gold"},
+		["Apple"] = {Opacity = 0, Corner = 20, Glow = 18, Borders = true, BorderThick = 2, BorderOpacity = 30, BorderMode = "Gradiente", CardTrans = 22, TopLine = true, TopLineH = 3, Blur = false, Theme = "Apple"},
+	}
+	H.PresetNames = {"Padrão", "Vidro", "Neon", "Minimalista", "Fofo", "Hacker", "Premium Ouro", "Apple"}
+	H.applyPreset = function(name)
+		local pr = Presets[name]
+		if not pr then return end
+		for k, v in pairs(pr) do if k ~= "Theme" then State[k] = v end end
+		if pr.Theme then applyTheme(pr.Theme) end
+		syncUI()
+		applyAppearance()
+	end
+end
+
+------------------------------------------------------------------
+-- PÁGINAS (núcleo)
+------------------------------------------------------------------
+do
+	local function Grid(page, w, h)
+		return new("Frame", {Size = UDim2.new(1, -4, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Parent = page},
+			{new("UIGridLayout", {CellSize = UDim2.fromOffset(w, h), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder})})
+	end
+	local themeStrokes = {}
+	refreshThemeCards = function() for name, s in pairs(themeStrokes) do s.Enabled = (State.Theme == name) end end
+	local function ThemeGrid(page)
+		local g = Grid(page, 134, 58)
+		for _, name in ipairs(ThemeNames) do
+			local tt = Themes[name]
+			local b = new("TextButton", {BackgroundColor3 = tt.bg, Text = "", AutoButtonColor = false, Parent = g}, {rc(12)})
+			local strip = new("Frame", {Size = UDim2.new(1, -12, 0, 16), Position = UDim2.fromOffset(6, 6), BackgroundColor3 = Color3.new(1, 1, 1), Parent = b}, {corner(6)})
+			local sg = new("UIGradient", {Color = ColorSequence.new(tt.accent, tt.accent2), Parent = strip})
+			if name == "Custom" then bind(sg, "Color", function() return ColorSequence.new(Themes.Custom.accent, Themes.Custom.accent2) end, true) end
+			new("Frame", {Size = UDim2.new(1, -12, 0, 8), Position = UDim2.fromOffset(6, 27), BackgroundColor3 = tt.row, Parent = b}, {corner(4)})
+			new("TextLabel", {Size = UDim2.new(1, 0, 0, 16), Position = UDim2.fromOffset(0, 38), BackgroundTransparency = 1, Text = name, Font = Enum.Font.GothamBold, TextSize = 11, TextColor3 = tt.text, Parent = b})
+			local st = new("UIStroke", {Thickness = 2.5, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Enabled = (State.Theme == name), Parent = b})
+			bind(st, "Color", "accent")
+			themeStrokes[name] = st
+			b.MouseButton1Click:Connect(function()
+				if name == "Custom" then updateCustom() end
+				applyTheme(name)
+			end)
+		end
+	end
+	local function FontGrid(page, key, withDefault, cb)
+		local g = Grid(page, 134, 40)
+		local list = {}
+		if withDefault then table.insert(list, "Padrão") end
+		for _, n in ipairs(FontOrder) do table.insert(list, n) end
+		local strokes = {}
+		for _, n in ipairs(list) do
+			local b = new("TextButton", {BackgroundColor3 = T.row, Text = "Aa  " .. n, TextSize = 13, TextColor3 = T.text, AutoButtonColor = false, TextTruncate = Enum.TextTruncate.AtEnd,
+				Font = (n == "Padrão") and Enum.Font.Gotham or getFont(n, false), Parent = g}, {rc(11)})
+			bind(b, "BackgroundColor3", "row")
+			bind(b, "TextColor3", "text")
+			local st = new("UIStroke", {Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Enabled = (State[key] == n), Parent = b})
+			bind(st, "Color", "accent")
+			strokes[n] = st
+			b.MouseButton1Click:Connect(function()
+				State[key] = n
+				for nm, s in pairs(strokes) do s.Enabled = (nm == n) end
+				task.spawn(function() pcall(cb, n) end)
+			end)
+		end
+	end
+	local infoRows = {}
+	H.infoRows = infoRows
+	local function InfoRow(page, name, fn)
+		local r = row(page, 34)
+		mkText({Size = UDim2.new(0.4, 0, 1, 0), Position = UDim2.fromOffset(14, 0), Text = name, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = r}, false, "sub")
+		local v = mkText({Size = UDim2.new(0.6, -28, 1, 0), Position = UDim2.new(0.4, 14, 0, 0), Text = "...", TextSize = 12, TextXAlignment = Enum.TextXAlignment.Right, TextTruncate = Enum.TextTruncate.AtEnd, Parent = r}, true)
+		table.insert(infoRows, {v, fn})
+	end
+	local EasingList = {"Quint", "Back", "Elastic", "Bounce", "Sine", "Quad", "Cubic", "Exponential", "Linear"}
+	local TransList = {"Deslizar", "Subir", "Fade", "Zoom", "Pop", "Girar", "Nenhuma"}
+	local FruitNames = {"Rocket-Rocket", "Spin-Spin", "Blade-Blade", "Spring-Spring", "Bomb-Bomb", "Smoke-Smoke", "Spike-Spike", "Flame-Flame", "Ice-Ice",
+		"Sand-Sand", "Dark-Dark", "Eagle-Eagle", "Diamond-Diamond", "Light-Light", "Rubber-Rubber", "Ghost-Ghost", "Magma-Magma", "Quake-Quake",
+		"Buddha-Buddha", "Love-Love", "Spider-Spider", "Sound-Sound", "Phoenix-Phoenix", "Portal-Portal", "Rumble-Rumble", "Pain-Pain",
+		"Blizzard-Blizzard", "Gravity-Gravity", "Mammoth-Mammoth", "T-Rex-T-Rex", "Dough-Dough", "Shadow-Shadow", "Venom-Venom",
+		"Control-Control", "Spirit-Spirit", "Dragon-Dragon", "Leopard-Leopard", "Kitsune-Kitsune"}
+
+	local pFarm, pBlox = addPage("Farm", "⚔"), addPage("Blox+", "★")
+	local pAuto, pTp = addPage("Auto", "⚙"), addPage("Teleport", "➤")
+	local pVis, pPlr = addPage("Visual", "◉"), addPage("Player", "☻")
+	local pInfo, pStyle = addPage("Info", "ⓘ"), addPage("Estilo", "✿")
+	local pPanel, pTabs = addPage("Painel", "▣"), addPage("Abas", "☰")
+	local pBtns, pPart = addPage("Botões", "◍"), addPage("Partículas", "❄")
+	local pIntro, pCfg = addPage("Intro", "▶"), addPage("Config", "✦")
+	H.pg = {Farm = pFarm, ["Blox+"] = pBlox, Auto = pAuto, Teleport = pTp, Visual = pVis, Player = pPlr, Info = pInfo, Estilo = pStyle,
+		Painel = pPanel, Abas = pTabs, ["Botões"] = pBtns, ["Partículas"] = pPart, Intro = pIntro, Config = pCfg}
+
+	-- FARM
+	Section(pFarm, "Auto Level (com quests)")
+	Toggle(pFarm, "Auto Level + Quest automática", "AutoLevel")
+	H.farmInfo = Label(pFarm, "Mar: —")
+	Slider(pFarm, "Velocidade de viagem", 100, 600, "TravelSpeed", nil, " st/s")
+	Section(pFarm, "Farm manual")
+	Toggle(pFarm, "Auto Farm (mob mais próximo)", "Farm")
+	Dropdown(pFarm, "Arma", {"Melee", "Sword", "Gun", "Blox Fruit"}, "Weapon")
+	Toggle(pFarm, "Equipar arma automático", "AutoEquip")
+	Slider(pFarm, "Altura sobre o mob", 4, 25, "Height", nil, " st")
+	Section(pFarm, "Boss")
+	Dropdown(pFarm, "Boss", H.Bosses, "Boss")
+	Toggle(pFarm, "Auto Boss (se estiver no mapa)", "AutoBoss")
+	Section(pFarm, "Ataque")
+	Toggle(pFarm, "Auto Click rápido", "Click")
+	Slider(pFarm, "Delay do ataque", 20, 500, "ClickDelay", nil, " ms")
+	Section(pFarm, "Coleta")
+	Toggle(pFarm, "Auto Baús", "Chest")
+	Toggle(pFarm, "Auto Pegar Frutas", "FruitGrab")
+
+	-- BLOX+
+	Section(pBlox, "Combate extra")
+	Toggle(pBlox, "Puxar mobs (agrupar)", "BringMob")
+	Slider(pBlox, "Alcance de puxar", 50, 600, "BringRange", nil, " st")
+	for _, k in ipairs({"Z", "X", "C", "V", "F"}) do Toggle(pBlox, "Auto Skill " .. k, "Skill" .. k) end
+	Slider(pBlox, "Intervalo das skills", 150, 3000, "SkillDelay", nil, " ms")
+	Toggle(pBlox, "Fugir com pouca vida", "FleeOn")
+	Slider(pBlox, "Fugir abaixo de", 10, 70, "FleeHP", nil, "%")
+	Section(pBlox, "Frutas")
+	Toggle(pBlox, "Auto comprar fruta aleatória", "AutoRandomFruit")
+	Toggle(pBlox, "Auto guardar frutas no inventário", "AutoStore")
+	Button(pBlox, "Guardar frutas agora", function()
+		local n = H.storeFruits()
+		notify("Frutas", n > 0 and (n .. " fruta(s) enviada(s)") or "Nenhuma fruta para guardar", 2.5)
+	end)
+	local stockLabel = Label(pBlox, "Estoque da loja: toque no botão abaixo.")
+	Button(pBlox, "Ver estoque da loja de frutas", function()
+		local list, names = invoke("GetFruits"), {}
+		if type(list) == "table" then for _, f in pairs(list) do if type(f) == "table" and f.OnSale then table.insert(names, tostring(f.Name)) end end end
+		stockLabel.Text = #names > 0 and ("Em estoque: " .. table.concat(names, ", ")) or "Não consegui ler o estoque."
+	end)
+	Dropdown(pBlox, "Fruta", FruitNames, "Fruit")
+	Button(pBlox, "Comprar fruta escolhida", function()
+		local r = invoke("PurchaseRawFruit", State.Fruit)
+		notify("Loja", r and tostring(r) or "Sem resposta do servidor", 3)
+	end)
+	Section(pBlox, "ESP extra")
+	Toggle(pBlox, "ESP Inimigos (15 mais próximos)", "ESPMobs")
+	Section(pBlox, "Jogadores")
+	Input(pBlox, "Ir até jogador", "nome + Enter", function(n)
+		local p = findPlayer(n)
+		local r = p and p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+		if r then State.ManualTravel = true; goTo(r.CFrame + Vector3.new(0, 4, 0)); State.ManualTravel = false
+		else notify("Jogador", "Não encontrado", 2, "warn") end
+	end)
+	Input(pBlox, "Espiar jogador", "nome + Enter", function(n)
+		local p = findPlayer(n)
+		local h = p and p.Character and p.Character:FindFirstChildOfClass("Humanoid")
+		if h then cam.CameraSubject = h; notify("Espiar", p.DisplayName, 2) else notify("Espiar", "Jogador não encontrado", 2, "warn") end
+	end)
+	Button(pBlox, "Parar de espiar", function() local h = hum() if h then cam.CameraSubject = h end end)
+	Section(pBlox, "NPCs de quest (mar atual)")
+	if #H.NPCNames > 0 then
+		Dropdown(pBlox, "NPC", H.NPCNames, "NPC")
+		Button(pBlox, "Ir até o NPC", function()
+			local e = H.NPCMap[State.NPC]
+			if not e then return end
+			State.ManualTravel = true
+			goTo(CFrame.new(e.q + Vector3.new(0, 4, 0)))
+			State.ManualTravel = false
+		end)
+	end
+	Button(pBlox, "Copiar ID do servidor", function()
+		local ok = pcall(function() setclipboard(game.JobId) end)
+		notify("Servidor", ok and "ID copiado!" or "Seu executor não tem setclipboard", 2.5, ok and "ok" or "warn")
+	end)
+
+	-- AUTO
+	Section(pAuto, "Haki")
+	Toggle(pAuto, "Auto Buso Haki", "Buso")
+	Toggle(pAuto, "Auto Ken Haki", "Ken")
+	Section(pAuto, "Status")
+	Dropdown(pAuto, "Status", {"Melee", "Defense", "Sword", "Gun", "Demon Fruit"}, "Stat")
+	Slider(pAuto, "Pontos por vez", 1, 10, "StatPoints")
+	Toggle(pAuto, "Auto Status", "AutoStats")
+	Section(pAuto, "Códigos")
+	Toggle(pAuto, "Auto resgatar códigos ao ligar", "AutoCodes", function(v) if v then H.redeemAll() end end)
+	Button(pAuto, "Resgatar todos os códigos agora", H.redeemAll)
+	Input(pAuto, "Adicionar código", "digite e dê Enter", function(code)
+		table.insert(H.CodeList, code)
+		task.spawn(function() H.redeemOne(code) end)
+	end)
+	H.codeLog = Label(pAuto, "Log dos códigos aparece aqui.")
+	Section(pAuto, "Conta")
+	Button(pAuto, "Entrar no time Pirata", function() invoke("SetTeam", "Pirates") notify("Time", "Pedido enviado: Pirata", 2) end)
+	Button(pAuto, "Entrar no time Marinha", function() invoke("SetTeam", "Marines") notify("Time", "Pedido enviado: Marinha", 2) end)
+	Button(pAuto, "Comprar fruta aleatória (Beli)", function()
+		local r = invoke("Cousin", "Buy")
+		notify("Fruta", r and tostring(r) or "Sem resposta do servidor", 3)
+	end)
+
+	-- TELEPORT
+	Section(pTp, "Mares")
+	Button(pTp, "Primeiro Mar", function() invoke("TravelMain") end)
+	Button(pTp, "Segundo Mar", function() invoke("TravelDressrosa") end)
+	Button(pTp, "Terceiro Mar", function() invoke("TravelZou") end)
+	Section(pTp, "Zonas do mar atual")
+	if #H.ZoneNames > 0 then
+		Dropdown(pTp, "Zona", H.ZoneNames, "Zone")
+		Button(pTp, "Viajar até a zona", function()
+			local e = H.ZoneMap[State.Zone]
+			if not e then return end
+			State.ManualTravel = true
+			goTo(CFrame.new(e.m + Vector3.new(0, 6, 0)))
+			State.ManualTravel = false
+		end)
+	end
+	Section(pTp, "Utilidades")
+	Button(pTp, "Ir até a fruta mais próxima", function()
+		local f = findFruit()
+		if f then
+			State.ManualTravel = true
+			goTo(f.Handle.CFrame)
+			State.ManualTravel = false
+			notify("Fruta", f.Name, 2)
+		else notify("Fruta", "Nenhuma fruta no mapa", 2, "warn") end
+	end)
+	Button(pTp, "Server Hop", H.serverHop)
+	Button(pTp, "Reentrar no servidor", function() S.TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, lp) end)
+	Button(pTp, "Resetar personagem", function() local h = hum() if h then h.Health = 0 end end)
+
+	-- VISUAL
+	Section(pVis, "ESP")
+	Toggle(pVis, "ESP Jogadores", "ESPPlayers")
+	Toggle(pVis, "ESP Frutas", "ESPFruits")
+	Toggle(pVis, "ESP Baús", "ESPChests")
+	Section(pVis, "Ambiente")
+	Toggle(pVis, "Fullbright (claridade)", "Fullbright", H.applyLight)
+	Toggle(pVis, "Remover neblina", "NoFog", H.applyLight)
+	Slider(pVis, "Campo de visão", 30, 120, "FOV", function(v) cam.FieldOfView = v end)
+	Slider(pVis, "Hora do dia", 0, 24, "Clock", function(v) S.Lighting.ClockTime = v end, "h")
+	Button(pVis, "Modo desempenho (menos lag)", H.boostFPS)
+
+	-- PLAYER
+	Section(pPlr, "Movimento")
+	Toggle(pPlr, "Velocidade personalizada", "SpeedOn", function(v) if not v then local h = hum() if h then h.WalkSpeed = 16 end end end)
+	Slider(pPlr, "Velocidade", 16, 200, "Speed")
+	Toggle(pPlr, "Pulo personalizado", "JumpOn", function(v) if not v then local h = hum() if h then h.JumpPower = 50 end end end)
+	Slider(pPlr, "Força do pulo", 50, 300, "Jump")
+	Toggle(pPlr, "Voar", "Fly")
+	Slider(pPlr, "Velocidade do voo", 20, 200, "FlySpeed")
+	Toggle(pPlr, "Noclip", "Noclip")
+	Toggle(pPlr, "Pulo infinito", "InfJump")
+	Toggle(pPlr, "Andar na água", "Water", H.applyWater)
+	Slider(pPlr, "Gravidade", 20, 300, "Gravity", function(v) workspace.Gravity = v end)
+
+	-- INFO
+	local head = row(pInfo, 96)
+	local av = new("ImageLabel", {Size = UDim2.fromOffset(74, 74), Position = UDim2.fromOffset(12, 11), BackgroundColor3 = T.side, Parent = head}, {corner(37)})
+	bind(av, "BackgroundColor3", "side")
+	local avStroke = new("UIStroke", {Color = T.accent, Thickness = 2.5, Parent = av})
+	bind(avStroke, "Color", "accent")
+	mkText({Size = UDim2.new(1, -110, 0, 28), Position = UDim2.fromOffset(98, 18), Text = lp.DisplayName, TextSize = 18, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = head}, true)
+	mkText({Size = UDim2.new(1, -110, 0, 20), Position = UDim2.fromOffset(98, 46), Text = "@" .. lp.Name, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = head}, false, "sub")
+	task.spawn(function()
+		local ok, img = pcall(function() return S.Players:GetUserThumbnailAsync(lp.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
+		if ok then av.Image = img end
+	end)
+	local gameName = "..."
+	task.spawn(function()
+		local ok, info = pcall(function() return S.MarketplaceService:GetProductInfo(game.PlaceId) end)
+		gameName = ok and info.Name or "Desconhecido"
+	end)
+	Section(pInfo, "Conta")
+	InfoRow(pInfo, "ID do usuário", function() return tostring(lp.UserId) end)
+	InfoRow(pInfo, "Conta criada em", function() return os.date("!%d/%m/%Y", os.time() - lp.AccountAge * 86400) end)
+	InfoRow(pInfo, "Idade da conta", function() return lp.AccountAge .. " dias" end)
+	InfoRow(pInfo, "Assinatura", function() return lp.MembershipType.Name end)
+	InfoRow(pInfo, "Time", function() return lp.Team and lp.Team.Name or "Nenhum" end)
+	Section(pInfo, "Blox Fruits")
+	InfoRow(pInfo, "Level", function() local v = dataVal("Level") return v and commas(v) or "—" end)
+	InfoRow(pInfo, "Beli", function() local v = dataVal("Beli") return v and commas(v) or "—" end)
+	InfoRow(pInfo, "Fragmentos", function() local v = dataVal("Fragments") return v and commas(v) or "—" end)
+	InfoRow(pInfo, "Fruta", function() local v = dataVal("DevilFruit") return (v and v ~= "") and tostring(v) or "—" end)
+	InfoRow(pInfo, "Raça", function() local v = dataVal("Race") return (v and v ~= "") and tostring(v) or "—" end)
+	Section(pInfo, "Sessão")
+	InfoRow(pInfo, "Jogo", function() return gameName end)
+	InfoRow(pInfo, "Place ID", function() return tostring(game.PlaceId) end)
+	InfoRow(pInfo, "Jogadores", function() return #S.Players:GetPlayers() .. "/" .. S.Players.MaxPlayers end)
+	InfoRow(pInfo, "Server ID", function() return string.sub(game.JobId, 1, 13) .. "…" end)
+	InfoRow(pInfo, "Dispositivo", function() return (UIS.TouchEnabled and not UIS.KeyboardEnabled) and "Celular / Tablet" or "PC" end)
+	InfoRow(pInfo, "Executor", function() local ok, n = pcall(identifyexecutor) return ok and tostring(n) or "Desconhecido" end)
+	InfoRow(pInfo, "FPS", function() return tostring(H.fps) end)
+	InfoRow(pInfo, "Ping", function() local ok, v = pcall(function() return S.Stats.Network.ServerStatsItem["Data Ping"]:GetValue() end) return ok and math.floor(v) .. " ms" or "—" end)
+	InfoRow(pInfo, "Tempo de sessão", function()
+		local s = tick() - H.start
+		return string.format("%02d:%02d:%02d", math.floor(s / 3600), math.floor(s % 3600 / 60), math.floor(s % 60))
+	end)
+
+	-- ESTILO
+	Section(pStyle, "Temas")
+	ThemeGrid(pStyle)
+	Section(pStyle, "Cor personalizada")
+	Slider(pStyle, "Vermelho", 0, 255, "R", function() updateCustom(); applyTheme("Custom") end)
+	Slider(pStyle, "Verde", 0, 255, "G", function() updateCustom(); applyTheme("Custom") end)
+	Slider(pStyle, "Azul", 0, 255, "B", function() updateCustom(); applyTheme("Custom") end)
+	Toggle(pStyle, "Cor de destaque arco-íris", "Rainbow", function(v)
+		if v then for k, val in pairs(T) do Themes.Custom[k] = val end applyTheme("Custom") end
+	end)
+	Section(pStyle, "Transição entre abas")
+	Dropdown(pStyle, "Tipo de transição", TransList, "Transition")
+	Dropdown(pStyle, "Suavização", EasingList, "Easing")
+	Slider(pStyle, "Duração", 100, 1000, "TransTime", nil, " ms")
+	Section(pStyle, "Fonte do painel")
+	FontGrid(pStyle, "PanelFont", false, setPanelFont)
+	Section(pStyle, "Fonte do jogo (menus, chat, HUD)")
+	FontGrid(pStyle, "GameFont", true, H.refreshGameFont)
+
+	-- PAINEL
+	local function AA() applyAppearance() end
+	Section(pPanel, "Presets de visual")
+	Dropdown(pPanel, "Preset", H.PresetNames, "Preset", H.applyPreset)
+	Section(pPanel, "Tamanho")
+	Slider(pPanel, "Largura", 420, 820, "PW", AA, " px")
+	Slider(pPanel, "Altura", 280, 520, "PH", AA, " px")
+	Slider(pPanel, "Escala geral", 50, 120, "ScalePct", function(v) State.Scale = v / 100; tween(uiscale, 0.25, {Scale = State.Scale}) end, "%")
+	Button(pPanel, "Centralizar painel", function() main.Position = UDim2.fromScale(0.5, 0.5) end)
+	Section(pPanel, "Fundo")
+	Slider(pPanel, "Transparência do painel", 0, 70, "Opacity", AA, "%")
+	Slider(pPanel, "Brilho do fundo (degradê)", 0, 80, "Glow", AA, "%")
+	Toggle(pPanel, "Animações giratórias (brilho/borda)", "AnimGlow")
+	Slider(pPanel, "Velocidade das animações", 1, 10, "AnimSpeed")
+	Slider(pPanel, "Transparência dos cards", 0, 85, "CardTrans", AA, "%")
+	Section(pPanel, "Bordas")
+	Toggle(pPanel, "Bordas de vidro", "Borders", AA)
+	Slider(pPanel, "Espessura da borda", 0, 6, "BorderThick", AA, " px")
+	Slider(pPanel, "Transparência da borda", 0, 100, "BorderOpacity", AA, "%")
+	Dropdown(pPanel, "Cor da borda", {"Tema", "Destaque", "Gradiente"}, "BorderMode", AA)
+	Section(pPanel, "Detalhes")
+	Toggle(pPanel, "Linha animada no topo", "TopLine", AA)
+	Slider(pPanel, "Espessura da linha", 1, 8, "TopLineH", AA, " px")
+	Slider(pPanel, "Arredondamento", 0, 32, "Corner", AA)
+	Slider(pPanel, "Espaço entre itens", 2, 18, "ListPad", AA, " px")
+	Toggle(pPanel, "Desfocar o jogo atrás do painel", "Blur", AA)
+	Slider(pPanel, "Intensidade do desfoque", 2, 30, "BlurSize", function() updateBlur() end)
+	Input(pPanel, "Nome do hub", "digite e dê Enter", function(t) State.Title = t; titleLabel.Text = t end)
+	Dropdown(pPanel, "Tecla mostrar/esconder", {"RightShift", "RightControl", "LeftAlt", "Insert", "K", "M", "P"}, "ToggleKey")
+
+	-- ABAS
+	Section(pTabs, "Estilo das abas")
+	Dropdown(pTabs, "Destaque da aba", {"Pílula", "Suave", "Contorno", "Linha
+		local first = true
+		loop(2, function()
+			for _, v in ipairs(workspace:GetChildren()) do
+				if (v:IsA("Tool") or v:IsA("Model")) and v.Name:lower():find("fruit") and v:FindFirstChild("Handle") and not seenF[v] then
+					seenF[v] = true
+					if State.AlertFruit and not first then
+						local r = root()
+						local d = r and math.floor((v.Handle.Position - r.Position).Magnitude) or 0
+						H.lastAlert = v.Handle.Position
+						notify("Fruta no mapa!", v.Name .. " a " .. d .. "m", 6, "warn")
+						if State.HookFruit then H.hook(lp.DisplayName .. ": " .. v.Name .. " apareceu no servidor") end
+					end
+				end
+			end
+			local folder = workspace:FindFirstChild("Enemies")
+			if folder then
+				for _, m in ipairs(folder:GetChildren()) do
+					if bossSet[m.Name] and not seenB[m] then
+						seenB[m] = true
+						local hr = m:FindFirstChild("HumanoidRootPart")
+						if State.AlertBoss and hr and not first then
+							H.lastAlert = hr.Position
+							notify("Boss no mapa!", m.Name, 6, "warn")
+							if State.HookBoss then H.hook(lp.DisplayName .. ": boss " .. m.Name .. " apareceu") end
+						end
+					end
+				end
+			end
+			first = false
+		end)
+		Button(pAdv, "Ir até o último alerta", function()
+			if not H.lastAlert then notify("Alerta", "Nenhum alerta ainda", 2, "warn") return end
+			State.ManualTravel = true
+			goTo(CFrame.new(H.lastAlert + Vector3.new(0, 6, 0)))
+			State.ManualTravel = false
+		end)
+		local lastLv = dataVal("Level")
+		loop(5, function()
+			local lv = dataVal("Level")
+			if lv and lastLv and lv > lastLv and State.HookLevel then H.hook(lp.DisplayName .. " subiu para o level " .. lv) end
+			lastLv = lv or lastLv
+		end)
+		Section(pAdv, "Raça")
+		local raceLbl = Label(pAdv, "")
+		loop(3, function()
+			local v = dataVal("Race")
+			raceLbl.Text = "Raça: " .. ((v and v ~= "") and tostring(v) or "—") .. "  (V2/V3/V4 ficam manuais: os fluxos mudam muito entre updates)"
+		end)
+	end -- fim Aventura
+
+	----------------------------------------------------------------
+	-- SISTEMA
+	----------------------------------------------------------------
+	do
+		Section(pSys, "Diagnóstico")
+		local diagLbl = Label(pSys, "Toque em 'Rodar diagnóstico'.")
+		Button(pSys, "Rodar diagnóstico", function()
+			local env = (getgenv and getgenv()) or _G
+			local checks = {
+				{"Remote CommF_", function() return S.ReplicatedStorage.Remotes.CommF_ end},
+				{"Remote CommE", function() return S.ReplicatedStorage.Remotes.CommE end},
+				{"Remote Redeem", function() return S.ReplicatedStorage.Remotes.Redeem end},
+				{"Dados (Data.Level)", function() return lp.Data.Level end},
+				{"Pasta Enemies", function() return workspace.Enemies end},
+				{"Mapa", function() return workspace.Map end},
+				{"UI de Quest", function() return lp.PlayerGui.Main.Quest end},
+				{"Baús (tag)", function() return #S.CollectionService:GetTagged("_ChestTagged") > 0 end},
+				{"Locations (raid)", function() return workspace._WorldOrigin.Locations end},
+			}
+			local lines = {}
+			for _, c in ipairs(checks) do
+				local ok, v = pcall(c[2])
+				table.insert(lines, ((ok and v) and "✓ " or "✗ ") .. c[1])
+			end
+			for _, fn in ipairs({"writefile", "isfile", "request", "queue_on_teleport", "setclipboard", "fireclickdetector", "sethiddenproperty", "gethui", "setfpscap"}) do
+				local has = env[fn] ~= nil or (fn == "request" and http_request ~= nil)
+				table.insert(lines, (has and "✓ " or "✗ ") .. "executor: " .. fn)
+			end
+			diagLbl.Text = table.concat(lines, "\n")
+		end)
+
+		Section(pSys, "Log de erros")
+		H.logLabel = Label(pSys, #H.logs > 0 and table.concat(H.logs, "\n") or "Sem erros.")
+		Button(pSys, "Limpar log", function() H.logs = {}; H.logLabel.Text = "Sem erros." end)
+		Button(pSys, "Copiar log", function()
+			local ok = pcall(function() setclipboard(table.concat(H.logs, "\n")) end)
+			notify("Log", ok and "Copiado!" or "Sem setclipboard", 2, ok and "ok" or "warn")
+		end)
+
+		Section(pSys, "Modo economia")
+		local function applyEco()
+			if State.Eco then
+				pcall(function() setfpscap(State.EcoFPS) end)
+				pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
+				S.Lighting.GlobalShadows = false
+				pcall(function() RS:Set3dRenderingEnabled(not State.EcoBlack) end)
+			else
+				pcall(function() setfpscap(State.FPSCap) end)
+				pcall(function() RS:Set3dRenderingEnabled(true) end)
+			end
+		end
+		Toggle(pSys, "Modo economia (menos FPS e gráficos)", "Eco", applyEco)
+		Toggle(pSys, "Tela preta 3D (economiza mais bateria)", "EcoBlack", applyEco)
+		Slider(pSys, "FPS no modo economia", 5, 60, "EcoFPS", function() if State.Eco then applyEco() end end)
+		table.insert(H.onUnload, function() pcall(function() RS:Set3dRenderingEnabled(true) end) end)
+
+		Section(pSys, "Sons e notificações")
+		Toggle(pSys, "Sons da interface", "SndOn")
+		Slider(pSys, "Volume", 0, 10, "SndVol")
+		Slider(pSys, "Máx. de notificações", 1, 8, "NotifMax")
+		Button(pSys, "Testar notificação", function() notify("Teste", "Notificação com ícone e barra de tempo", 3, "ok") end)
+
+		Section(pSys, "Webhook do Discord")
+		Label(pSys, "Use só o seu próprio webhook. Ele fica salvo no seu arquivo de config.")
+		Input(pSys, "URL do webhook", "https://discord.com/api/webhooks/...", function(u)
+			State.HookURL = u
+			H.save(true)
+			notify("Webhook", "URL salva", 2, "ok")
+		end)
+		Toggle(pSys, "Avisar fruta no servidor", "HookFruit")
+		Toggle(pSys, "Avisar level up", "HookLevel")
+		Toggle(pSys, "Avisar boss / evento do mar", "HookBoss")
+		Toggle(pSys, "Avisar desconexão", "HookDisc")
+		Button(pSys, "Testar webhook", function()
+			local ok = H.hook("✅ Apple Hub v" .. H.version .. " conectado como " .. lp.DisplayName)
+			notify("Webhook", ok and "Enviado!" or "Falhou (URL inválida ou executor sem request)", 3, ok and "ok" or "error")
+		end)
+		conn(S.GuiService.ErrorMessageChanged:Connect(function()
+			if State.HookDisc then H.hook("⚠️ " .. lp.DisplayName .. " foi desconectado") end
+		end))
+
+		Section(pSys, "Atualização e reexecução")
+		Label(pSys, "Cole o link RAW do seu script. Use só links seus ou de confiança.")
+		Input(pSys, "URL do script", "https://raw.githubusercontent.com/...", function(u)
+			State.UpdURL = u
+			H.save(true)
+			notify("Update", "URL salva", 2, "ok")
+		end)
+		Toggle(pSys, "Verificar atualização ao abrir", "UpdCheck")
+		H.checkUpdate = function(manual)
+			if State.UpdURL == "" then
+				if manual then notify("Update", "Defina a URL primeiro", 3, "warn") end
+				return
+			end
+			local ok, src = pcall(function() return game:HttpGet(State.UpdURL) end)
+			if not ok then
+				H.err(src)
+				if manual then notify("Update", "Não consegui baixar", 3, "error") end
+				return
+			end
+			local v = tonumber(src:match("Apple Hub v([%d%.]+)"))
+			if v and v > (tonumber(H.version) or 0) then
+				notify("Update", "Versão " .. v .. " disponível! Use 'Atualizar agora'.", 6, "warn")
+			elseif manual then
+				notify("Update", "Você está na versão mais recente", 3, "ok")
+			end
+		end
+		Button(pSys, "Verificar atualização", function() H.checkUpdate(true) end)
+		Button(pSys, "Atualizar agora", function()
+			if State.UpdURL == "" then notify("Update", "Defina a URL primeiro", 3, "warn") return end
+			local ok, src = pcall(function() return game:HttpGet(State.UpdURL) end)
+			if not ok then notify("Update", "Falha ao baixar", 3, "error") return end
+			local fn, err = loadstring(src)
+			if not fn then notify("Update", "Script inválido: " .. tostring(err), 4, "error") return end
+			H.save(true)
+			if getgenv and getgenv().AppleHubUnload then getgenv().AppleHubUnload() end
+			task.defer(fn)
+		end)
+		Toggle(pSys, "Reexecutar após teleporte (server hop)", "Requeue", function(v)
+			if v and State.UpdURL == "" then notify("Requeue", "Defina a URL do script antes", 4, "warn") end
+		end)
+		conn(lp.OnTeleport:Connect(function()
+			if State.Requeue and State.UpdURL ~= "" and queue_on_teleport then
+				H.save(true)
+				local u = State.UpdURL:gsub('"', "")
+				pcall(function() queue_on_teleport('loadstring(game:HttpGet("' .. u .. '"))()') end)
+			end
+		end))
+		Toggle(pSys, "Lembrar farm ao reexecutar", "Remember")
+		local RUNKEYS = {"AutoLevel", "Farm", "AutoBoss", "Chest", "FruitGrab", "MatFarm", "AutoRaid", "AutoSea", "Click", "Buso", "Ken", "AutoStats", "BringMob"}
+		loop(15, function()
+			if not State.Remember then return end
+			local t = {}
+			for _, k in ipairs(RUNKEYS) do t[k] = State[k] end
+			H.db.last = t
+			H.save(true)
+		end)
+		if State.Remember and H.db.last then
+			task.delay(8, function()
+				for k, v in pairs(H.db.last) do if v == true and State[k] ~= nil then State[k] = true end end
+				syncUI()
+				notify("Sessão", "Farm anterior restaurado", 3, "ok")
+			end)
+		end
+
+		Section(pSys, "Comando secreto")
+		Input(pSys, "Comando", "👀", function(cmd)
+			cmd = cmd:lower()
+			if cmd == "apple" then
+				applyTheme("Apple")
+				H.PartShapes["Maçã"] = "🍎"
+				State.BubbleIcon, State.PartShape, State.PartColor, State.PartDir = "🍎", "Maçã", "Branco", "Cair"
+				syncUI(); applyBubble(); H.refreshParts()
+			elseif cmd == "matrix" then
+				applyTheme("Matrix")
+				for k, v in pairs({PartShape = "Linha", PartColor = "Personalizada", PartR = 0, PartG = 255, PartB = 106, PartSpeed = 130, PartCount = 90, PartDir = "Cair"}) do State[k] = v end
+				syncUI(); H.refreshParts()
+			elseif cmd == "disco" then
+				for k, v in pairs(T) do Themes.Custom[k] = v end
+				State.Rainbow, State.AnimGlow, State.BorderMode, State.PartColor = true, true, "Gradiente", "Arco-íris"
+				State.PartShape, State.PartSpin, State.PartSpeed, State.FxMode = "Estrela", true, 60, "Aurora"
+				applyTheme("Custom")
+				syncUI(); applyAppearance(); H.refreshParts()
+			elseif cmd == "neve" then
+				H.applyPartPreset("Neve")
+			elseif cmd == "konami" then
+				Themes.Ultra = nil
+				H.addTheme("Ultra", {"#0b0b0f", "#14141c", "#1f1f2b", "#ffffff", "#9a9ab5", "#ff0080", "#00e1ff"})
+				notify("Segredo", "Tema Ultra desbloqueado! 🎮", 5, "ok")
+				return
+			else
+				notify("Segredo", "Nada aconteceu... 👀", 2)
+				return
+			end
+			notify("Segredo", "Comando '" .. cmd .. "' ativado ✦", 3, "ok")
+		end)
+	end -- fim Sistema
+end -- fim do bloco principal da Parte 2
+
+------------------------------------------------------------------
+-- ABERTURA
+------------------------------------------------------------------
+do
+	switchTab("Farm")
+	relayout()
+	applyAppearance()
+	applyBubble()
+	H.refreshParts()
+	if State.GameFont ~= "Padrão" then task.spawn(H.refreshGameFont) end
+	local function launch()
+		showMain()
+		task.delay(0.7, function() notify("Apple Hub v" .. H.version, "Carregado! Bom jogo ✦", 3, "ok") end)
+	end
+	if State.IntroOn and State.IntroStyle ~= "Nenhuma" then playIntro(launch) else launch() end
+	if State.AutoCodes then task.delay(5, H.redeemAll) end
+	if State.UpdCheck and State.UpdURL ~= "" then task.spawn(function() task.wait(4) H.checkUpdate(false) end) end
+end

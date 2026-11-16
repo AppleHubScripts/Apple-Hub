@@ -2058,3 +2058,608 @@ do
 	if State.AutoCodes then task.delay(5, H.redeemAll) end
 	if State.UpdCheck and State.UpdURL ~= "" then task.spawn(function() task.wait(4) H.checkUpdate(false) end) end
 end
+------------------------------------------------------------------
+-- PARTE 2 | v6 módulos
+------------------------------------------------------------------
+do
+	local pFav, pProf = addPage("Favoritos", "♥"), addPage("Perfis", "☷")
+	local pEdit, pAdv, pSys = addPage("Editor", "✎"), addPage("Aventura", "☠"), addPage("Sistema", "⚒")
+	local PG = H.pg
+	PG.Favoritos, PG.Perfis, PG.Editor, PG.Aventura, PG.Sistema = pFav, pProf, pEdit, pAdv, pSys
+
+	-- util: container dinâmico
+	local function box(page)
+		return new("Frame", {Size = UDim2.new(1, -4, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Parent = page},
+			{new("UIListLayout", {Padding = UDim.new(0, State.ListPad), SortOrder = Enum.SortOrder.LayoutOrder})})
+	end
+	local function clear(f) for _, c in ipairs(f:GetChildren()) do if not c:IsA("UIListLayout") then c:Destroy() end end end
+	local function split(s) local t = {} for w in s:gmatch("%S+") do table.insert(t, w) end return t end
+	local function sortedKeys(t) local r = {} for k in pairs(t) do table.insert(r, k) end table.sort(r) return r end
+
+	----------------------------------------------------------------
+	-- SONS DA INTERFACE
+	----------------------------------------------------------------
+	do
+		local sounds = {click = "rbxasset://sounds/button.wav", switch = "rbxasset://sounds/switch.wav", notif = "rbxasset://sounds/electronicpingshort.wav"}
+		local sg = new("Folder", {Name = "Snd", Parent = gui})
+		H.snd = function(kind)
+			if not State.SndOn then return end
+			pcall(function()
+				local s = Instance.new("Sound")
+				s.SoundId = sounds[kind] or sounds.click
+				s.Volume = State.SndVol / 10
+				s.Parent = sg
+				s:Play()
+				S.Debris:AddItem(s, 2)
+			end)
+		end
+		local function hook(d)
+			if d:IsA("TextButton") and not d:GetAttribute("AHSnd") then
+				d:SetAttribute("AHSnd", true)
+				d.MouseButton1Click:Connect(function() H.snd(d.Size == UDim2.fromOffset(46, 26) and "switch" or "click") end)
+			end
+		end
+		for _, d in ipairs(gui:GetDescendants()) do hook(d) end
+		conn(gui.DescendantAdded:Connect(hook))
+	end
+
+	----------------------------------------------------------------
+	-- FUNDO ANIMADO + MODO COMPACTO (aba Painel)
+	----------------------------------------------------------------
+	do
+		local fx = new("Frame", {Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = 0, Parent = main})
+		local blobs = {}
+		for i = 1, 4 do
+			blobs[i] = new("Frame", {AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = T.accent, BackgroundTransparency = 0.86, BorderSizePixel = 0, Parent = fx},
+				{new("UICorner", {CornerRadius = UDim.new(0.5, 0)})})
+			bind(blobs[i], "BackgroundColor3", i % 2 == 0 and "accent2" or "accent")
+		end
+		local gradF = new("Frame", {Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.9, BorderSizePixel = 0, Parent = fx})
+		local gg = new("UIGradient", {Parent = gradF})
+		bind(gg, "Color", function() return ColorSequence.new({ColorSequenceKeypoint.new(0, T.accent), ColorSequenceKeypoint.new(0.5, T.accent2), ColorSequenceKeypoint.new(1, T.accent)}) end, true)
+		local pulseF = new("Frame", {Size = UDim2.fromScale(1, 1), BackgroundColor3 = T.accent, BackgroundTransparency = 0.95, BorderSizePixel = 0, Parent = fx})
+		bind(pulseF, "BackgroundColor3", "accent")
+		task.spawn(function()
+			while alive do
+				task.wait(0.03)
+				local m, t, sp = State.FxMode, tick(), State.FxSpeed
+				for _, b in ipairs(blobs) do b.Visible = (m == "Aurora") end
+				gradF.Visible, pulseF.Visible = (m == "Degradê"), (m == "Pulso")
+				if m == "Aurora" then
+					local sz = State.PW * 0.7
+					for i, b in ipairs(blobs) do
+						b.Size = UDim2.fromOffset(sz, sz)
+						b.Position = UDim2.fromScale(0.5 + 0.38 * math.sin(t * sp * 0.15 + i * 2), 0.5 + 0.38 * math.cos(t * sp * 0.12 + i * 1.7))
+					end
+				elseif m == "Degradê" then gg.Rotation = (t * sp * 12) % 360
+				elseif m == "Pulso" then pulseF.BackgroundTransparency = 0.93 + 0.05 * math.sin(t * sp * 0.6) end
+			end
+		end)
+		Section(PG.Painel, "Fundo animado")
+		Dropdown(PG.Painel, "Efeito de fundo", {"Nenhum", "Aurora", "Degradê", "Pulso"}, "FxMode")
+		Slider(PG.Painel, "Velocidade do efeito", 1, 10, "FxSpeed")
+		Section(PG.Painel, "Modo compacto")
+		Toggle(PG.Painel, "Mini painel (ideal pra celular)", "Compact", function(v)
+			if v then
+				H.compactSaved = {PW = State.PW, PH = State.PH, SideW = State.SideW, TabIcons = State.TabIcons, TabNames = State.TabNames, ShowChip = State.ShowChip}
+				State.PW, State.PH, State.SideW, State.TabIcons, State.TabNames, State.ShowChip = 360, 300, 50, true, false, false
+			elseif H.compactSaved then
+				for k, val in pairs(H.compactSaved) do State[k] = val end
+				H.compactSaved = nil
+			end
+			syncUI()
+			applyAppearance()
+		end)
+	end
+
+	----------------------------------------------------------------
+	-- RASTRO DO CURSOR (aba Partículas)
+	----------------------------------------------------------------
+	do
+		local tg = new("ScreenGui", {Name = "AppleHubTrail", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 500, ZIndexBehavior = Enum.ZIndexBehavior.Sibling})
+		tg.Parent = parent
+		table.insert(H.onUnload, function() pcall(function() tg:Destroy() end) end)
+		local last, count = 0, 0
+		conn(UIS.InputChanged:Connect(function(i)
+			if not State.TrailOn then return end
+			if i.UserInputType ~= Enum.UserInputType.MouseMovement and i.UserInputType ~= Enum.UserInputType.Touch then return end
+			if tick() - last < 0.03 or count > 40 then return end
+			last = tick()
+			count = count + 1
+			local m = State.TrailColor
+			local col = m == "Tema" and T.accent or (m == "Tema 2" and T.accent2) or (m == "Arco-íris" and Color3.fromHSV(tick() * 0.4 % 1, 0.7, 1)) or Color3.new(1, 1, 1)
+			local sz = State.TrailSize
+			local l = new("TextLabel", {AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(i.Position.X, i.Position.Y), Size = UDim2.fromOffset(30, 30), BackgroundTransparency = 1,
+				Text = H.PartShapes[State.TrailShape] or "✦", TextColor3 = col, Font = Enum.Font.GothamBold, TextSize = sz, Parent = tg})
+			tween(l, 0.6, {TextTransparency = 1, TextSize = math.max(2, sz * 0.3), Position = UDim2.fromOffset(i.Position.X + math.random(-14, 14), i.Position.Y + math.random(6, 24))}, Enum.EasingStyle.Quad)
+			task.delay(0.65, function() count = count - 1; l:Destroy() end)
+		end))
+		Section(PG["Partículas"], "Rastro do cursor / dedo")
+		Toggle(PG["Partículas"], "Ativar rastro", "TrailOn")
+		Dropdown(PG["Partículas"], "Formato do rastro", H.PartShapeNames, "TrailShape")
+		Slider(PG["Partículas"], "Tamanho do rastro", 6, 30, "TrailSize", nil, " px")
+		Dropdown(PG["Partículas"], "Cor do rastro", {"Tema", "Tema 2", "Arco-íris", "Branco"}, "TrailColor")
+	end
+
+	----------------------------------------------------------------
+	-- INTRO POR TEMA
+	----------------------------------------------------------------
+	do
+		local map = {Cyberpunk = {"Glitch", "Tema"}, Matrix = {"Glitch", "Tema"}, Apple = {"Cinematic", "Maçã"}, Gold = {"Neon", "Ouro"}, Ice = {"Warp", "Branco"},
+			Sakura = {"Neon", "Tema"}, Galaxy = {"Warp", "Tema"}, Lava = {"Cinematic", "Tema"}, Synthwave = {"Neon", "Tema"}, Neon = {"Neon", "Tema"},
+			Vaporwave = {"Neon", "Tema"}, AMOLED = {"Minimal", "Branco"}, Hologram = {"Warp", "Tema"}}
+		local orig = playIntro
+		playIntro = function(cb)
+			local m = State.IntroByTheme and map[State.Theme]
+			if m then State.IntroStyle, State.IntroColor = m[1], m[2]; syncUI() end
+			return orig(cb)
+		end
+	end
+
+	----------------------------------------------------------------
+	-- EDITOR DE TEMAS (criar / exportar / importar)
+	----------------------------------------------------------------
+	do
+		local KEYS = {"bg", "side", "row", "text", "sub", "accent", "accent2"}
+		local function hexes(t) local r = {} for _, k in ipairs(KEYS) do table.insert(r, "#" .. t[k]:ToHex()) end return r end
+		local list
+		local function rebuild()
+			clear(list)
+			for _, name in ipairs(sortedKeys(H.db.themes)) do Button(list, "Aplicar: " .. name, function() applyTheme(name) end) end
+		end
+		local function addTheme(name, hex7)
+			name = name:gsub("[^%w_%-]", "")
+			if name == "" or name == "Custom" then notify("Tema", "Nome inválido", 3, "warn") return end
+			if Themes[name] and not H.db.themes[name] then notify("Tema", "Esse nome já é de um tema do hub", 3, "warn") return end
+			local ok, t = pcall(function() return th(table.unpack(hex7)) end)
+			if not ok or #hex7 ~= 7 then notify("Tema", "Preciso de 7 cores hex válidas", 3, "error") return end
+			if not Themes[name] then table.insert(ThemeNames, #ThemeNames, name) end
+			Themes[name] = t
+			H.db.themes[name] = hex7
+			H.save(true)
+			rebuild()
+			applyTheme(name)
+			notify("Tema", name .. " criado!", 2.5, "ok")
+		end
+		H.addTheme = addTheme
+		Section(pEdit, "Criar tema")
+		local tpl = Label(pEdit, "")
+		local function showTpl() tpl.Text = "Modelo (copie, edite e envie abaixo):\nMeuTema " .. table.concat(hexes(T), " ") end
+		showTpl()
+		Button(pEdit, "Atualizar modelo com o tema atual", showTpl)
+		Input(pEdit, "Criar tema", "Nome #bg #lado #card #texto #sub #cor1 #cor2", function(s)
+			local p = split(s)
+			local name = table.remove(p, 1)
+			addTheme(name or "", p)
+		end)
+		Section(pEdit, "Compartilhar")
+		local codeLbl = Label(pEdit, "Código aparece aqui.")
+		Button(pEdit, "Copiar código do tema atual", function()
+			local code = "AH1|" .. State.Theme .. "|" .. table.concat(hexes(T), "|")
+			codeLbl.Text = code
+			local ok = pcall(function() setclipboard(code) end)
+			notify("Tema", ok and "Código copiado!" or "Copie o texto acima manualmente", 2.5, ok and "ok" or "warn")
+		end)
+		Input(pEdit, "Importar código", "AH1|Nome|#...|#...", function(code)
+			local p = {}
+			for w in code:gmatch("[^|]+") do table.insert(p, w) end
+			if p[1] ~= "AH1" or #p < 9 then notify("Tema", "Código inválido", 3, "error") return end
+			addTheme(p[2], {p[3], p[4], p[5], p[6], p[7], p[8], p[9]})
+		end)
+		Section(pEdit, "Meus temas")
+		list = box(pEdit)
+		rebuild()
+		Input(pEdit, "Apagar tema", "nome + Enter", function(name)
+			if not H.db.themes[name] then notify("Tema", "Não encontrado", 2, "warn") return end
+			H.db.themes[name] = nil
+			Themes[name] = nil
+			for i, n in ipairs(ThemeNames) do if n == name then table.remove(ThemeNames, i) break end end
+			if State.Theme == name then applyTheme("Midnight") end
+			H.save(true)
+			rebuild()
+		end)
+	end
+
+	----------------------------------------------------------------
+	-- FAVORITOS + BUSCA
+	----------------------------------------------------------------
+	do
+		local REG = {
+			{"Auto Level + Quest", "AutoLevel", "Farm"}, {"Auto Farm", "Farm", "Farm"}, {"Equipar arma automático", "AutoEquip", "Farm"},
+			{"Auto Boss", "AutoBoss", "Farm"}, {"Auto Click", "Click", "Farm"}, {"Auto Baús", "Chest", "Farm"}, {"Auto Pegar Frutas", "FruitGrab", "Farm"},
+			{"Puxar mobs", "BringMob", "Blox+"}, {"Auto Skill Z", "SkillZ", "Blox+"}, {"Auto Skill X", "SkillX", "Blox+"}, {"Auto Skill C", "SkillC", "Blox+"},
+			{"Auto Skill V", "SkillV", "Blox+"}, {"Auto Skill F", "SkillF", "Blox+"}, {"Fugir com pouca vida", "FleeOn", "Blox+"},
+			{"Auto fruta aleatória", "AutoRandomFruit", "Blox+"}, {"Auto guardar frutas", "AutoStore", "Blox+"}, {"ESP Inimigos", "ESPMobs", "Blox+"},
+			{"Auto Buso Haki", "Buso", "Auto"}, {"Auto Ken Haki", "Ken", "Auto"}, {"Auto Status", "AutoStats", "Auto"},
+			{"ESP Jogadores", "ESPPlayers", "Visual"}, {"ESP Frutas", "ESPFruits", "Visual"}, {"ESP Baús", "ESPChests", "Visual"},
+			{"Fullbright", "Fullbright", "Visual", H.applyLight}, {"Remover neblina", "NoFog", "Visual", H.applyLight},
+			{"Velocidade personalizada", "SpeedOn", "Player"}, {"Pulo personalizado", "JumpOn", "Player"}, {"Voar", "Fly", "Player"},
+			{"Noclip", "Noclip", "Player"}, {"Pulo infinito", "InfJump", "Player"}, {"Andar na água", "Water", "Player", H.applyWater},
+			{"Auto Raid", "AutoRaid", "Aventura"}, {"Auto Sea Beast", "AutoSea", "Aventura"}, {"Farm de material", "MatFarm", "Aventura"},
+			{"Avisar eventos do mar", "SeaWatch", "Aventura"}, {"Alerta de fruta", "AlertFruit", "Aventura"}, {"Alerta de boss", "AlertBoss", "Aventura"},
+			{"Modo economia", "Eco", "Sistema"}, {"Sons da interface", "SndOn", "Sistema"}, {"Rastro do cursor", "TrailOn", "Partículas"},
+			{"Reconectar automaticamente", "AutoRejoin", "Config"},
+		}
+		local JUMPS = {{"Temas e cores", "Estilo"}, {"Fontes", "Estilo"}, {"Transições de aba", "Estilo"}, {"Tamanho do painel", "Painel"}, {"Bordas", "Painel"},
+			{"Partículas", "Partículas"}, {"Intro", "Intro"}, {"Códigos", "Auto"}, {"Status / pontos", "Auto"}, {"Entrar no time", "Auto"},
+			{"Teleporte / mares", "Teleport"}, {"Server hop", "Teleport"}, {"Lista de bosses", "Farm"}, {"Comprar fruta", "Blox+"}, {"Espiar jogador", "Blox+"},
+			{"Perfis", "Perfis"}, {"Criar tema", "Editor"}, {"Webhook Discord", "Sistema"}, {"Diagnóstico", "Sistema"}, {"Log de erros", "Sistema"},
+			{"Fila de tarefas", "Aventura"}, {"Metas de material", "Aventura"}, {"Botões / bolha", "Botões"}, {"Abas", "Abas"}}
+		local base = {}
+		local labels = {}
+		for _, e in ipairs(REG) do table.insert(labels, e[1]) end
+		if State.FavPick == "" then State.FavPick = labels[1] end
+		local live = {}
+		local function liveToggle(container, e)
+			local before = syncers[e[2]]
+			Toggle(container, e[1] .. "  (" .. e[3] .. ")", e[2], e[4])
+			table.insert(live, syncers[e[2]])
+			syncers[e[2]] = before
+		end
+		local resBox, favBox
+		local function find(label) for _, e in ipairs(REG) do if e[1] == label then return e end end end
+		local function buildFavs()
+			clear(favBox)
+			live = {}
+			for _, key in ipairs(H.db.favs) do
+				for _, e in ipairs(REG) do if e[2] == key then liveToggle(favBox, e) end end
+			end
+		end
+		Section(pFav, "Buscar função")
+		Input(pFav, "Buscar", "ex: baú, esp, voar", function(q)
+			q = q:lower()
+			clear(resBox)
+			local n = 0
+			for _, e in ipairs(REG) do
+				if n < 8 and (e[1]:lower():find(q, 1, true) or e[3]:lower():find(q, 1, true)) then n = n + 1; liveToggle(resBox, e) end
+			end
+			for _, j in ipairs(JUMPS) do
+				if n < 10 and (j[1]:lower():find(q, 1, true) or j[2]:lower():find(q, 1, true)) then
+					n = n + 1
+					Button(resBox, "→ " .. j[1] .. "  (" .. j[2] .. ")", function() switchTab(j[2]) end)
+				end
+			end
+			if n == 0 then notify("Busca", "Nada encontrado", 2, "warn") end
+		end)
+		resBox = box(pFav)
+		Section(pFav, "Meus favoritos")
+		Dropdown(pFav, "Função", labels, "FavPick")
+		Button(pFav, "★ Fixar / remover favorito", function()
+			local e = find(State.FavPick)
+			if not e then return end
+			local idx
+			for i, k in ipairs(H.db.favs) do if k == e[2] then idx = i end end
+			if idx then table.remove(H.db.favs, idx) else table.insert(H.db.favs, e[2]) end
+			H.save(true)
+			buildFavs()
+		end)
+		favBox = box(pFav)
+		buildFavs()
+		loop(0.4, function()
+			for _, f in ipairs(live) do pcall(f) end
+			for _, k in ipairs(H.db.favs) do pcall(syncers[k]) end
+		end)
+	end
+
+	----------------------------------------------------------------
+	-- PERFIS
+	----------------------------------------------------------------
+	do
+		local EXCL = {HookURL = true, UpdURL = true, Scale = true, Fleeing = true, ManualTravel = true, Zone = true, NPC = true, Compact = true, FavPick = true}
+		local function snap()
+			local t = {}
+			for k, v in pairs(State) do
+				local ty = type(v)
+				if not EXCL[k] and (ty == "boolean" or ty == "number" or ty == "string") then t[k] = v end
+			end
+			return t
+		end
+		local function load(t)
+			for k, v in pairs(t) do if State[k] ~= nil and type(State[k]) == type(v) and not EXCL[k] then State[k] = v end end
+			if t.Theme and Themes[t.Theme] then applyTheme(t.Theme) end
+			updateCustom()
+			syncUI()
+			applyAppearance(); applyBubble(); H.refreshParts()
+			pcall(H.applyLight); pcall(H.applyWater)
+			cam.FieldOfView = State.FOV
+			workspace.Gravity = State.Gravity
+		end
+		local built = {
+			["Farm AFK"] = {AutoLevel = true, Click = true, Buso = true, Ken = true, AutoStats = true, FleeOn = true, BringMob = true},
+			["Visual total"] = {ESPPlayers = true, ESPFruits = true, ESPChests = true, ESPMobs = true, Fullbright = true, NoFog = true, FOV = 90},
+			["PvP leve"] = {ESPPlayers = true, SpeedOn = true, Speed = 60, JumpOn = true, Jump = 90, InfJump = true, Fullbright = true},
+		}
+		Section(pProf, "Prontos")
+		for _, n in ipairs({"Farm AFK", "Visual total", "PvP leve"}) do
+			Button(pProf, "Ativar: " .. n, function() load(built[n]); notify("Perfil", n .. " ativado", 2, "ok") end)
+		end
+		Button(pProf, "Desligar tudo (farm/ESP)", function()
+			for _, k in ipairs({"AutoLevel", "Farm", "AutoBoss", "Chest", "FruitGrab", "Click", "BringMob", "MatFarm", "AutoRaid", "AutoSea", "ESPPlayers", "ESPFruits", "ESPChests", "ESPMobs", "Fly", "Noclip"}) do State[k] = false end
+			syncUI()
+			notify("Perfil", "Tudo desligado", 2)
+		end)
+		Section(pProf, "Meus perfis")
+		local list
+		local function rebuild()
+			clear(list)
+			for _, name in ipairs(sortedKeys(H.db.profiles)) do
+				Button(list, "Carregar: " .. name, function() load(H.db.profiles[name]); notify("Perfil", name .. " carregado", 2, "ok") end)
+			end
+		end
+		Input(pProf, "Salvar perfil atual", "nome + Enter", function(name)
+			name = name:gsub("[^%w_%- ]", "")
+			if name == "" then return end
+			H.db.profiles[name] = snap()
+			H.save(true)
+			rebuild()
+			notify("Perfil", name .. " salvo", 2, "ok")
+		end)
+		list = box(pProf)
+		rebuild()
+		Input(pProf, "Apagar perfil", "nome + Enter", function(name)
+			if H.db.profiles[name] then H.db.profiles[name] = nil; H.save(true); rebuild() else notify("Perfil", "Não encontrado", 2, "warn") end
+		end)
+		H.snapshot, H.loadProfile = snap, load
+	end
+
+	----------------------------------------------------------------
+	-- WEBHOOK
+	----------------------------------------------------------------
+	H.hook = function(msg)
+		local url = State.HookURL
+		if not (url:match("^https://[%w%.]*discord%.com/api/webhooks/") or url:match("^https://[%w%.]*discordapp%.com/api/webhooks/")) then return false end
+		local req = request or http_request or (syn and syn.request)
+		if not req then return false end
+		return (pcall(function()
+			req({Url = url, Method = "POST", Headers = {["Content-Type"] = "application/json"},
+				Body = S.HttpService:JSONEncode({content = msg, username = "Apple Hub", allowed_mentions = {parse = {}}})})
+		end))
+	end
+
+	----------------------------------------------------------------
+	-- AVENTURA: raid, mar, material, metas, fila, alertas
+	----------------------------------------------------------------
+	do
+		local function invCount(name)
+			local inv = invoke("getInventory")
+			if type(inv) ~= "table" then return nil end
+			for _, it in pairs(inv) do
+				if type(it) == "table" and it.Name == name then return tonumber(it.Count) or tonumber(it.count) or 1 end
+			end
+			return 0
+		end
+		H.invCount = invCount
+
+		-- RAID (experimental)
+		Section(pAdv, "Raid automática (experimental)")
+		Dropdown(pAdv, "Tipo de raid", {"Flame", "Ice", "Quake", "Light", "Dark", "String", "Rumble", "Magma", "Buddha", "Sand", "Phoenix", "Dough"}, "RaidType")
+		Toggle(pAdv, "Auto Raid (iniciar + farmar)", "AutoRaid")
+		local raidLbl = Label(pAdv, "Precisa de Microchip no inventário. Se algo falhar, veja Sistema > Log.")
+		local lastStart = 0
+		loop(0.25, function()
+			if not State.AutoRaid or State.Fleeing then return end
+			local inRaid = false
+			pcall(function() inRaid = lp.PlayerGui.Main.Timer.Visible end)
+			if inRaid then
+				raidLbl.Text = "Em raid: farmando..."
+				if State.AutoEquip then equipWeapon() end
+				local t = nearestMob()
+				if t then hoverTo(t.Position) else
+					local best
+					pcall(function()
+						for _, c in ipairs(workspace._WorldOrigin.Locations:GetChildren()) do
+							local n = tonumber(c.Name:match("Island (%d+)"))
+							if n and (not best or n > best.n) then best = {n = n, c = c} end
+						end
+					end)
+					if best then
+						local cf = best.c:IsA("BasePart") and best.c.CFrame or best.c:GetPivot()
+						goTo(cf + Vector3.new(0, 60, 0))
+					end
+				end
+			elseif tick() - lastStart > 12 then
+				lastStart = tick()
+				raidLbl.Text = "Iniciando raid " .. State.RaidType .. "..."
+				invoke("RaidsNpc", "Select", State.RaidType)
+				pcall(function()
+					for _, d in ipairs(workspace.Map:GetDescendants()) do
+						if d:IsA("ClickDetector") and d:GetFullName():find("RaidSummon") then fireclickdetector(d) break end
+					end
+				end)
+			end
+		end)
+
+		-- MAR
+		Section(pAdv, "Eventos do mar (experimental)")
+		Toggle(pAdv, "Avisar quando surgir evento", "SeaWatch")
+		Toggle(pAdv, "Auto atacar Sea Beast / Terror Shark", "AutoSea")
+		local seenSea = {}
+		local function seaTargets()
+			local list = {}
+			local sb = workspace:FindFirstChild("SeaBeasts")
+			if sb then for _, m in ipairs(sb:GetChildren()) do local hr = m:FindFirstChild("HumanoidRootPart") if hr then table.insert(list, {m = m, hr = hr, n = "Sea Beast"}) end end end
+			local ts = nearestMob("Terrorshark")
+			if ts then table.insert(list, {m = ts.Parent, hr = ts, n = "Terror Shark"}) end
+			return list
+		end
+		loop(2, function()
+			for _, t in ipairs(seaTargets()) do
+				if not seenSea[t.m] then
+					seenSea[t.m] = true
+					if State.SeaWatch then
+						notify("Evento do mar", t.n .. " apareceu!", 6, "warn")
+						H.lastAlert = t.hr.Position
+						if State.HookBoss then H.hook(lp.DisplayName .. ": " .. t.n .. " apareceu no servidor") end
+					end
+				end
+			end
+		end)
+		loop(0.15, function()
+			if not State.AutoSea or State.Fleeing then return end
+			local best, bd
+			local r = root()
+			if not r then return end
+			for _, t in ipairs(seaTargets()) do
+				local d = (t.hr.Position - r.Position).Magnitude
+				if not bd or d < bd then best, bd = t, d end
+			end
+			if best then
+				if State.AutoEquip then equipWeapon() end
+				hoverTo(best.hr.Position + Vector3.new(0, 25, 0))
+			end
+		end)
+
+		-- MATERIAL
+		Section(pAdv, "Farm de materiais")
+		local MATS = {
+			["Scrap Metal"] = {"Pirate", "Brute", "Mercenary", "Swan Pirate"}, ["Leather"] = {"Pirate", "Brute", "Mercenary"},
+			["Magma Ore"] = {"Military Soldier", "Military Spy", "Lava Pirate", "Magma Ninja"},
+			["Fish Tail"] = {"Fishman Warrior", "Fishman Commando", "Fishman Raider", "Fishman Captain"},
+			["Angel Wings"] = {"God's Guard", "Shanda", "Royal Squad", "Royal Soldier"}, ["Mystic Droplet"] = {"Sea Soldier", "Water Fighter"},
+			["Radioactive Material"] = {"Factory Staff"}, ["Vampire Fang"] = {"Vampire"},
+			["Dragon Scale"] = {"Dragon Crew Warrior", "Dragon Crew Archer", "Female Islander", "Giant Islander"}, ["Gunpowder"] = {"Pistol Billionaire"},
+			["Mini Tusk"] = {"Mythological Pirate"}, ["Conjured Cocoa"] = {"Chocolate Bar Battler", "Cocoa Warrior"},
+			["Demonic Wisp"] = {"Demonic Soul"}, ["Bones"] = {"Reborn Skeleton", "Living Zombie", "Demonic Soul", "Posessed Mummy"},
+		}
+		H.MATS = MATS
+		local matNames = sortedKeys(MATS)
+		Dropdown(pAdv, "Material", matNames, "Material")
+		Slider(pAdv, "Meta (quantidade)", 1, 500, "MatGoal")
+		Toggle(pAdv, "Farmar material escolhido", "MatFarm")
+		local matLbl = Label(pAdv, "A lista de mobs por material é aproximada; mobs de outro mar são ignorados.")
+		local function seaMobs()
+			local r = {}
+			for _, m in ipairs(MATS[State.Material] or {}) do
+				local info = H.mobInfo[m]
+				if info and info.sea == H.seaIndex() then table.insert(r, m) end
+			end
+			return r
+		end
+		loop(0.05, function()
+			if not State.MatFarm or State.Fleeing or not root() then return end
+			local mobs = seaMobs()
+			if #mobs == 0 then
+				State.MatFarm = false
+				syncUI()
+				notify("Material", "Nenhum mob desse material neste mar", 4, "warn")
+				return
+			end
+			if State.AutoEquip then equipWeapon() end
+			local best, bd, r = nil, nil, root()
+			for _, n in ipairs(mobs) do
+				local t = nearestMob(n)
+				if t then
+					local d = (t.Position - r.Position).Magnitude
+					if not bd or d < bd then best, bd = t, d end
+				end
+			end
+			if best then hoverTo(best.Position) else goTo(CFrame.new(H.mobInfo[mobs[1]].e.m + Vector3.new(0, State.Height, 0))) end
+		end)
+		loop(12, function()
+			if not State.MatFarm then return end
+			local c = invCount(State.Material)
+			if c then
+				matLbl.Text = State.Material .. ": " .. c .. "/" .. State.MatGoal
+				if c >= State.MatGoal then
+					State.MatFarm = false
+					syncUI()
+					notify("Material", "Meta de " .. State.Material .. " atingida!", 5, "ok")
+					H.hook(lp.DisplayName .. ": meta de " .. State.Material .. " atingida (" .. c .. ")")
+				end
+			end
+		end)
+
+		-- METAS
+		Section(pAdv, "Metas de materiais (rastreador)")
+		local goalLbl = Label(pAdv, "Adicione metas no formato Material:quantidade.")
+		local function refreshGoals()
+			if #H.db.goals == 0 then goalLbl.Text = "Sem metas. Ex: Fish Tail:20" return end
+			local inv = invoke("getInventory")
+			local lines = {}
+			for _, g in ipairs(H.db.goals) do
+				local c = 0
+				if type(inv) == "table" then for _, it in pairs(inv) do if type(it) == "table" and it.Name == g.name then c = tonumber(it.Count) or 1 end end end
+				table.insert(lines, (c >= g.count and "✓ " or "• ") .. g.name .. "  " .. c .. "/" .. g.count)
+			end
+			goalLbl.Text = table.concat(lines, "\n")
+		end
+		Input(pAdv, "Adicionar meta", "Fish Tail:20", function(s)
+			local n, c = s:match("^(.-):(%d+)$")
+			if not n then notify("Meta", "Use Material:quantidade", 3, "warn") return end
+			table.insert(H.db.goals, {name = n, count = tonumber(c)})
+			H.save(true)
+			refreshGoals()
+		end)
+		Input(pAdv, "Remover meta", "nome do material", function(n)
+			for i, g in ipairs(H.db.goals) do if g.name == n then table.remove(H.db.goals, i) break end end
+			H.save(true)
+			refreshGoals()
+		end)
+		Button(pAdv, "Atualizar progresso", refreshGoals)
+
+		-- FILA
+		Section(pAdv, "Fila de tarefas")
+		local QT = {"Level até", "Baús (seg)", "Boss (seg)", "Material até", "Raid (seg)", "Mar (1-3)", "Esperar (seg)"}
+		local queue = H.db.queue
+		local qLbl = Label(pAdv, "")
+		local function showQ()
+			local l = {}
+			for i, q in ipairs(queue) do table.insert(l, i .. ". " .. q.t .. " " .. q.v) end
+			qLbl.Text = #l > 0 and table.concat(l, "\n") or "Fila vazia."
+		end
+		showQ()
+		Dropdown(pAdv, "Tipo de passo", QT, "QType")
+		Input(pAdv, "Adicionar passo", "valor (número) + Enter", function(v)
+			local n = tonumber(v)
+			if not n then notify("Fila", "Digite um número", 2, "warn") return end
+			table.insert(queue, {t = State.QType, v = n})
+			H.save(true)
+			showQ()
+		end)
+		local running = false
+		local function sleep(n) local t = tick() while running and alive and tick() - t < n do task.wait(0.3) end end
+		local function setOnly(k)
+			for _, kk in ipairs(H.autoKeys) do State[kk] = false end
+			if k then State[k] = true end
+			syncUI()
+		end
+		local function waitUntil(cond, timeout)
+			local t = tick()
+			while running and alive and not cond() and tick() - t < timeout do task.wait(1) end
+		end
+		local function run()
+			if running or #queue == 0 then return end
+			running = true
+			notify("Fila", "Executando " .. #queue .. " passos", 3)
+			for i, q in ipairs(queue) do
+				if not running or not alive then break end
+				qLbl.Text = "Passo " .. i .. "/" .. #queue .. ": " .. q.t .. " " .. q.v
+				if q.t == "Level até" then setOnly("AutoLevel"); waitUntil(function() return (dataVal("Level") or 0) >= q.v end, 18000)
+				elseif q.t == "Baús (seg)" then setOnly("Chest"); sleep(q.v)
+				elseif q.t == "Boss (seg)" then setOnly("AutoBoss"); sleep(q.v)
+				elseif q.t == "Raid (seg)" then setOnly("AutoRaid"); sleep(q.v)
+				elseif q.t == "Material até" then
+					setOnly("MatFarm")
+					waitUntil(function() return (invCount(State.Material) or 0) >= q.v end, 3600)
+				elseif q.t == "Mar (1-3)" then
+					setOnly(nil)
+					invoke(q.v == 1 and "TravelMain" or (q.v == 2 and "TravelDressrosa" or "TravelZou"))
+					sleep(20)
+				else setOnly(nil); sleep(q.v) end
+			end
+			setOnly(nil)
+			running = false
+			showQ()
+			notify("Fila", "Fila finalizada", 4, "ok")
+		end
+		Button(pAdv, "▶ Executar fila", function() task.spawn(run) end)
+		Button(pAdv, "■ Parar fila", function() running = false; setOnly(nil); showQ() end)
+		Button(pAdv, "Limpar fila", function() for i = #queue, 1, -1 do table.remove(queue, i) end H.save(true) showQ() end)
+
+		-- ALERTAS
+		Section(pAdv, "Alertas")
+		Toggle(pAdv, "Avisar quando surgir fruta", "AlertFruit")
+		Toggle(pAdv, "Avisar quando surgir boss", "AlertBoss")
+		local seenF, seenB, bossSet = {}, {}, {}
+		for _, b in ipairs(H.Bosses) do bossSet[b] = true end
+			  or v:IsA("Model")) and v.Name:lower():find("fruit") and v:FindFirstChild("Handle") and not
